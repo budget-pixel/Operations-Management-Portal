@@ -1,14 +1,217 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><text y=%22.9em%22 font-size=%2220%22>🏛️</text></svg>" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Submit and manage budget amendment / transfer requests." />
-    <title>Budget Amendment Request</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget Amendment Request</title>
+  <meta name="description" content="Submit and manage budget amendment / transfer requests." />
+  <link rel="icon" type="image/png" href="assets/logo-placeholder.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <img class="logo" src="assets/logo-placeholder.png" alt="County office logo placeholder" />
+      <div>
+        <p class="eyebrow">Office of Management and Budget</p>
+        <h1>Budget Amendment Request</h1>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <!-- Draft found banner -->
+    <div id="draftBanner" class="banner banner-warning no-print" hidden>
+      <span>A saved draft was found. Would you like to restore it?</span>
+      <span class="banner-actions">
+        <button type="button" id="restoreDraftBtn" class="btn btn-secondary">Restore</button>
+        <button type="button" id="discardDraftBtn" class="btn btn-ghost">Discard</button>
+      </span>
+    </div>
+
+    <!-- Submission / draft status banner -->
+    <div id="statusBanner" class="banner no-print" hidden></div>
+
+    <form id="budgetForm" novalidate>
+
+      <!-- Request information -->
+      <section class="card">
+        <h2 class="section-title">Request Information</h2>
+        <div class="card-body">
+          <div class="grid-2">
+            <div class="field">
+              <label for="date">Date <span class="required">*</span></label>
+              <input type="date" id="date" name="date" required />
+              <p class="error-text" id="date-error"></p>
+            </div>
+            <div class="field">
+              <label for="department">Department <span class="required">*</span></label>
+              <input type="text" id="department" name="department" placeholder="e.g. Public Works" required />
+              <p class="error-text" id="department-error"></p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="description">Information concerning the following budget amendment request</label>
+            <textarea id="description" name="description" rows="4" placeholder="Describe the purpose of this budget amendment..."></textarea>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <label for="preparedBy">Prepared By (BY) <span class="required">*</span></label>
+              <input type="text" id="preparedBy" name="preparedBy" required />
+              <p class="error-text" id="preparedBy-error"></p>
+            </div>
+            <div class="field">
+              <label for="title">Title <span class="required">*</span></label>
+              <input type="text" id="title" name="title" required />
+              <p class="error-text" id="title-error"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Amendment type -->
+      <section class="card">
+        <h2 class="section-title">This Request Will Require A <span class="required">*</span></h2>
+        <div class="card-body">
+          <div class="radio-group" role="radiogroup" aria-required="true" aria-describedby="amendmentType-error">
+
+            <label class="radio-option">
+              <input type="radio" name="amendmentType" value="intradepartmental" required />
+              <span>
+                <strong>Intradepartmental Amendment</strong> <span class="statute">(Fl. St. 129.06(2)(a))</span>
+                <small>Requires approval from County Administrator and Budget Officer.</small>
+              </span>
+            </label>
+
+            <label class="radio-option">
+              <input type="radio" name="amendmentType" value="interdepartmental" />
+              <span>
+                <strong>Interdepartmental Amendment</strong> <span class="statute">(Fl. St. 129.06(2)(b))</span>
+                <small>Requires motion from BCC.</small>
+              </span>
+            </label>
+
+            <label class="radio-option">
+              <input type="radio" name="amendmentType" value="reserve" />
+              <span>
+                <strong>Reserve for future construction and improvements</strong> <span class="statute">(Fl. St. 129.06(2)(c))</span>
+                <small>Requires Resolution by BCC.</small>
+              </span>
+            </label>
+
+            <label class="radio-option">
+              <input type="radio" name="amendmentType" value="unanticipatedRevenue" />
+              <span>
+                <strong>Unanticipated revenue</strong> <span class="statute">(Fl. St. 129.06(2)(d))</span>
+                <small>Requires Resolution by BCC.</small>
+              </span>
+            </label>
+
+            <label class="radio-option">
+              <input type="radio" name="amendmentType" value="increasedReceipts" />
+              <span>
+                <strong>Increased receipts for enterprise fund</strong> <span class="statute">(Fl. St. 129.06(2)(e))</span>
+                <small>Requires Resolution by BCC.</small>
+              </span>
+            </label>
+
+            <label class="radio-option">
+              <input type="radio" name="amendmentType" value="publicHearing" />
+              <span>
+                <strong>Requires Public Hearing</strong> <span class="statute">(Fl. St. 129.06(2)(f))</span>
+              </span>
+            </label>
+
+          </div>
+          <p class="error-text" id="amendmentType-error"></p>
+        </div>
+      </section>
+
+      <!-- Transfer From / Transfer To -->
+      <section class="tables-grid">
+
+        <div class="card">
+          <h2 class="section-title">Transfer From</h2>
+          <div class="card-body">
+            <div class="table-wrapper">
+              <table class="transfer-table">
+                <thead>
+                  <tr>
+                    <th>Account Number</th>
+                    <th>Amount</th>
+                    <th class="no-print"><span class="sr-only">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody id="transferFromBody"><!-- rows injected by script.js --></tbody>
+              </table>
+            </div>
+            <p class="error-text" id="transferFrom-error"></p>
+            <button type="button" class="btn btn-ghost add-row-btn no-print" data-section="transferFrom">+ Add Row</button>
+            <div class="total-row">
+              <span>Total</span>
+              <span id="transferFromTotal">$0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">Transfer To</h2>
+          <div class="card-body">
+            <div class="table-wrapper">
+              <table class="transfer-table">
+                <thead>
+                  <tr>
+                    <th>Account Number</th>
+                    <th>Amount</th>
+                    <th class="no-print"><span class="sr-only">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody id="transferToBody"><!-- rows injected by script.js --></tbody>
+              </table>
+            </div>
+            <p class="error-text" id="transferTo-error"></p>
+            <button type="button" class="btn btn-ghost add-row-btn no-print" data-section="transferTo">+ Add Row</button>
+            <div class="total-row">
+              <span>Total</span>
+              <span id="transferToTotal">$0.00</span>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Actions -->
+      <div class="actions no-print">
+        <button type="submit" class="btn btn-primary">Submit Request</button>
+        <button type="button" id="saveDraftBtn" class="btn btn-secondary">Save Draft</button>
+        <button type="button" id="printBtn" class="btn btn-secondary">Print Form</button>
+        <button type="button" id="clearBtn" class="btn btn-danger">Clear Form</button>
+      </div>
+
+    </form>
+  </main>
+
+  <!-- Template for a single Transfer From/To table row -->
+  <template id="transferRowTemplate">
+    <tr class="transfer-row">
+      <td>
+        <label class="sr-only">Account number</label>
+        <input type="text" class="account-input" placeholder="e.g. 001-1234-541" aria-label="Account number" />
+      </td>
+      <td>
+        <label class="sr-only">Amount</label>
+        <input type="text" class="amount-input" inputmode="decimal" placeholder="0.00" aria-label="Amount" />
+      </td>
+      <td class="no-print">
+        <button type="button" class="remove-row-btn" aria-label="Remove row" title="Remove row">&times;</button>
+      </td>
+    </tr>
+  </template>
+
+  <script src="script.js"></script>
+</body>
 </html>
