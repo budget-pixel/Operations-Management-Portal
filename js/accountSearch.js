@@ -257,7 +257,11 @@ window.BudgetApp.AccountSearch = (function () {
     // The listbox is position:fixed, so it won't track the input if the
     // page (or a scrollable ancestor) scrolls while it's open — closing
     // is simpler and safer than repositioning on every scroll event.
-    window.addEventListener('scroll', function () {
+    // Scroll events don't bubble, but a capturing listener on window still
+    // sees them on the way down — including scrolling *inside* the listbox
+    // itself (it has its own overflow-y: auto), which must NOT close it.
+    window.addEventListener('scroll', function (event) {
+      if (event.target === listboxEl) return;
       if (isOpen) closeDropdown();
     }, true);
 
