@@ -22,6 +22,9 @@
 
   <main class="page">
 
+    <!-- Chart of Accounts load status (loading / error / loaded+refresh) -->
+    <div id="coaStatusBanner" class="banner banner-info no-print" hidden></div>
+
     <!-- Draft found banner -->
     <div id="draftBanner" class="banner banner-warning no-print" hidden>
       <span>A saved draft was found. Would you like to restore it?</span>
@@ -40,17 +43,10 @@
       <section class="card">
         <h2 class="section-title">Request Information</h2>
         <div class="card-body">
-          <div class="grid-2">
-            <div class="field">
-              <label for="date">Date <span class="required">*</span></label>
-              <input type="date" id="date" name="date" required />
-              <p class="error-text" id="date-error"></p>
-            </div>
-            <div class="field">
-              <label for="department">Department <span class="required">*</span></label>
-              <input type="text" id="department" name="department" placeholder="e.g. Public Works" required />
-              <p class="error-text" id="department-error"></p>
-            </div>
+          <div class="field">
+            <label for="date">Date <span class="required">*</span></label>
+            <input type="date" id="date" name="date" required />
+            <p class="error-text" id="date-error"></p>
           </div>
 
           <div class="field">
@@ -131,6 +127,16 @@
         </div>
       </section>
 
+      <!-- Department(s) — rendered by app.js: one selector for Intradepartmental,
+           two independent selectors (Transfer From / Transfer To) for every
+           other amendment type. Depends on the amendment type chosen above. -->
+      <section class="card">
+        <h2 class="section-title">Department</h2>
+        <div class="card-body" id="departmentFieldsContainer">
+          <p class="field-hint" id="departmentPlaceholderHint">Select an amendment type above to choose the department(s) involved.</p>
+        </div>
+      </section>
+
       <!-- Transfer From / Transfer To -->
       <section class="tables-grid">
 
@@ -141,12 +147,12 @@
               <table class="transfer-table">
                 <thead>
                   <tr>
-                    <th>Account Number</th>
+                    <th>Account</th>
                     <th>Amount</th>
                     <th class="no-print"><span class="sr-only">Remove</span></th>
                   </tr>
                 </thead>
-                <tbody id="transferFromBody"><!-- rows injected by script.js --></tbody>
+                <tbody id="transferFromBody"><!-- rows injected by js/app.js --></tbody>
               </table>
             </div>
             <p class="error-text" id="transferFrom-error"></p>
@@ -165,12 +171,12 @@
               <table class="transfer-table">
                 <thead>
                   <tr>
-                    <th>Account Number</th>
+                    <th>Account</th>
                     <th>Amount</th>
                     <th class="no-print"><span class="sr-only">Remove</span></th>
                   </tr>
                 </thead>
-                <tbody id="transferToBody"><!-- rows injected by script.js --></tbody>
+                <tbody id="transferToBody"><!-- rows injected by js/app.js --></tbody>
               </table>
             </div>
             <p class="error-text" id="transferTo-error"></p>
@@ -195,12 +201,18 @@
     </form>
   </main>
 
-  <!-- Template for a single Transfer From/To table row -->
+  <!-- Template for a single Transfer From/To table row. The account cell
+       is a searchable combobox (wired up in app.js) instead of a plain
+       text input — see js/accountSearch.js. -->
   <template id="transferRowTemplate">
     <tr class="transfer-row">
-      <td>
-        <label class="sr-only">Account number</label>
-        <input type="text" class="account-input" placeholder="e.g. 001-1234-541" aria-label="Account number" />
+      <td class="account-cell">
+        <label class="sr-only">Search account by number, code, or name</label>
+        <div class="combobox" data-combobox="account">
+          <input type="text" class="account-input" placeholder="Select a department first..." aria-label="Account" disabled />
+          <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
+          <ul class="combobox-listbox" role="listbox" hidden></ul>
+        </div>
       </td>
       <td>
         <label class="sr-only">Amount</label>
@@ -212,11 +224,32 @@
     </tr>
   </template>
 
-  <!-- Load order matters: app.js expects the other modules to already be
-       attached to window.BudgetApp by the time it runs. -->
+  <!-- Template for a department combobox. app.js clones this once
+       (Intradepartmental) or twice (every other amendment type, labeled
+       "Transfer From Department" / "Transfer To Department"). -->
+  <template id="departmentComboboxTemplate">
+    <div class="field department-field">
+      <label class="department-field-label"></label>
+      <div class="combobox" data-combobox="department">
+        <input type="text" class="department-input" placeholder="Search department by name or code..." aria-label="Department" />
+        <button type="button" class="combobox-clear no-print" aria-label="Clear department selection" hidden>&times;</button>
+        <ul class="combobox-listbox" role="listbox" hidden></ul>
+      </div>
+      <p class="error-text department-error"></p>
+    </div>
+  </template>
+
+  <!-- Load order matters: each module expects the ones before it to
+       already be attached to window.BudgetApp by the time it runs. -->
   <script src="js/calculations.js"></script>
   <script src="js/storage.js"></script>
+  <script src="js/googleSheets.js"></script>
+  <script src="js/departments.js"></script>
+  <script src="js/expenses.js"></script>
+  <script src="js/revenue.js"></script>
+  <script src="js/accountSearch.js"></script>
   <script src="js/validation.js"></script>
+  <script src="js/amendmentRules.js"></script>
   <script src="js/print.js"></script>
   <script src="js/app.js"></script>
 </body>

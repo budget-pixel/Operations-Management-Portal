@@ -1,13 +1,16 @@
 /* =============================================================
    app.js
-   Main entry point: DOM references, Transfer table row
+   Main entry point: DOM references, Chart of Accounts loading,
+   department/account combobox wiring, Transfer table row
    management, event wiring, and page initialization.
 
    Depends on (must load first): Calculations, Storage,
-   Validation, Print — see index.html for load order.
+   GoogleSheets, Departments, Expenses, Revenue, AccountSearch,
+   Validation, AmendmentRules, Print — see index.html for load
+   order.
    ============================================================= */
 
-(function (Calculations, Storage, Validation, Print) {
+(function (Calculations, Storage, GoogleSheets, Departments, Expenses, Revenue, AccountSearch, Validation, AmendmentRules, Print) {
   'use strict';
 
   var INITIAL_ROW_COUNT = 5;
@@ -23,6 +26,7 @@
 
   var form = document.getElementById('budgetForm');
   var rowTemplate = document.getElementById('transferRowTemplate');
+  var departmentTemplate = document.getElementById('departmentComboboxTemplate');
 
   var tableBodies = {
     transferFrom: document.getElementById('transferFromBody'),
@@ -36,6 +40,9 @@
     transferFrom: document.getElementById('transferFrom-error'),
     transferTo: document.getElementById('transferTo-error'),
   };
+
+  var coaStatusBanner = document.getElementById('coaStatusBanner');
+  var departmentFieldsContainer = document.getElementById('departmentFieldsContainer');
 
   var draftBanner = document.getElementById('draftBanner');
   var restoreDraftBtn = document.getElementById('restoreDraftBtn');
@@ -53,26 +60,245 @@
 
   var requiredFields = [
     { input: document.getElementById('date'), error: document.getElementById('date-error'), message: 'Date is required.' },
-    { input: document.getElementById('department'), error: document.getElementById('department-error'), message: 'Department is required.' },
     { input: document.getElementById('preparedBy'), error: document.getElementById('preparedBy-error'), message: 'Prepared By is required.' },
     { input: document.getElementById('title'), error: document.getElementById('title-error'), message: 'Title is required.' },
   ];
 
   // -----------------------------------------------------------
+  // Department selection state
+  // -----------------------------------------------------------
+  //
+  // departmentMode is 'single' (Intradepartmental — one department governs
+  // both Transfer From and Transfer To) or 'dual' (every other amendment
+  // type — Transfer From and Transfer To each get their own department).
+
+  var departmentMode = null;
+  var departmentSelections = { single: null, from: null, to: null };
+  var departmentControllers = {};
+
+  function getCurrentDepartmentCode(section) {
+    if (departmentMode === AmendmentRules.SINGLE) {
+      return departmentSelections.single ? departmentSelections.single.code : null;
+    }
+    if (departmentMode === AmendmentRules.DUAL) {
+      var selection = section === 'transferFrom' ? departmentSelections.from : departmentSelections.to;
+      return selection ? selection.code : null;
+    }
+    return null;
+  }
+
+  // Clones the department combobox template, wires it to Departments.search,
+  // and appends it to departmentFieldsContainer.
+  function mountDepartmentField(labelText, onSelectDepartment) {
+    var fragment = departmentTemplate.content.cloneNode(true);
+    var fieldEl = fragment.querySelector('.department-field');
+    var labelEl = fieldEl.querySelector('.department-field-label');
+    var inputEl = fieldEl.querySelector('.department-input');
+    var clearBtn = fieldEl.querySelector('.combobox-clear');
+    var listboxEl = fieldEl.querySelector('.combobox-listbox');
+    var errorEl = fieldEl.querySelector('.department-error');
+
+    var uid = 'dept-' + Math.random().toString(36).slice(2);
+    inputEl.id = uid;
+    labelEl.setAttribute('for', uid);
+    labelEl.textContent = labelText;
+    listboxEl.id = uid + '-listbox';
+    errorEl.id = uid + '-error';
+
+    departmentFieldsContainer.appendChild(fieldEl);
+
+    var controller = AccountSearch.createCombobox({
+      inputEl: inputEl,
+      clearBtnEl: clearBtn,
+      listboxEl: listboxEl,
+      wrapperEl: fieldEl.querySelector('.combobox'),
+      emptyMessage: 'No matching departments.',
+      getResults: function (query) {
+        return Departments.search(query).map(function (dept) {
+          return { id: dept.code, label: dept.code + ' - ' + dept.name, data: dept };
+        });
+      },
+      onSelect: function (dept) {
+        errorEl.textContent = '';
+        onSelectDepartment(dept);
+      },
+    });
+    controller.inputEl = inputEl;
+    controller.errorEl = errorEl;
+
+    return controller;
+  }
+
+  // Renders the department field(s) that match the currently chosen
+  // amendment type. Switching between two amendment types that share the
+  // same department mode (e.g. Interdepartmental -> Reserve) leaves
+  // existing department/account selections alone, since only the cited
+  // statute changed, not where the money is moving.
+  function renderDepartmentSection() {
+    var checkedRadio = amendmentRadios.filter(function (r) { return r.checked; })[0];
+    var newMode = checkedRadio ? AmendmentRules.getDepartmentMode(checkedRadio.value) : null;
+
+    if (!newMode) {
+      resetDepartmentSection();
+      return;
+    }
+
+    if (newMode === departmentMode) return;
+
+    buildDepartmentFields(newMode);
+  }
+
+  function buildDepartmentFields(mode) {
+    departmentMode = mode;
+    departmentFieldsContainer.innerHTML = '';
+    departmentFieldsContainer.classList.toggle('grid-2', mode === AmendmentRules.DUAL);
+    departmentSelections = { single: null, from: null, to: null };
+
+    if (mode === AmendmentRules.SINGLE) {
+      departmentControllers = {
+        single: mountDepartmentField('Department', function (dept) {
+          departmentSelections.single = dept;
+          refreshAccountFilters('transferFrom', dept ? dept.code : null);
+          refreshAccountFilters('transferTo', dept ? dept.code : null);
+        }),
+      };
+    } else {
+      departmentControllers = {
+        from: mountDepartmentField('Transfer From Department', function (dept) {
+          departmentSelections.from = dept;
+          refreshAccountFilters('transferFrom', dept ? dept.code : null);
+        }),
+        to: mountDepartmentField('Transfer To Department', function (dept) {
+          departmentSelections.to = dept;
+          refreshAccountFilters('transferTo', dept ? dept.code : null);
+        }),
+      };
+    }
+
+    clearAllAccountSelections();
+  }
+
+  function resetDepartmentSection() {
+    departmentMode = null;
+    departmentControllers = {};
+    departmentSelections = { single: null, from: null, to: null };
+    departmentFieldsContainer.classList.remove('grid-2');
+    departmentFieldsContainer.innerHTML = '';
+
+    var hint = document.createElement('p');
+    hint.className = 'field-hint';
+    hint.id = 'departmentPlaceholderHint';
+    hint.textContent = 'Select an amendment type above to choose the department(s) involved.';
+    departmentFieldsContainer.appendChild(hint);
+
+    clearAllAccountSelections();
+  }
+
+  // Points a row's account combobox at (or away from) a department, and
+  // optionally clears whatever was previously selected in it.
+  function applyRowDepartmentState(row, departmentCode, clearSelection) {
+    row._departmentCode = departmentCode;
+    if (clearSelection) {
+      row._selectedAccount = null;
+    }
+    row._accountController.setDisabled(!departmentCode);
+    row.querySelector('.account-input').placeholder = departmentCode
+      ? 'Search account by number or name...'
+      : 'Select a department first...';
+  }
+
+  // Disables and clears every row's account combobox in a section — used
+  // whenever that section's governing department changes (including to
+  // "no department"), per the "changing department clears the account"
+  // requirement.
+  function refreshAccountFilters(section, departmentCode) {
+    getRows(section).forEach(function (row) {
+      applyRowDepartmentState(row, departmentCode, true);
+    });
+  }
+
+  function clearAllAccountSelections() {
+    SECTIONS.forEach(function (section) {
+      refreshAccountFilters(section, null);
+    });
+  }
+
+  // -----------------------------------------------------------
   // Transfer table row management
   // -----------------------------------------------------------
 
-  // Builds one <tr> from the <template>, wiring up its input/remove listeners.
+  // Builds one <tr> from the <template>, wiring up its account combobox
+  // (department-scoped, expense+revenue combined) and amount/remove
+  // listeners.
   function createRow(section) {
     var fragment = rowTemplate.content.cloneNode(true);
     var row = fragment.querySelector('.transfer-row');
     var accountInput = row.querySelector('.account-input');
+    var accountClearBtn = row.querySelector('.combobox-clear');
+    var accountListbox = row.querySelector('.combobox-listbox');
     var amountInput = row.querySelector('.amount-input');
     var removeBtn = row.querySelector('.remove-row-btn');
 
+    var uid = 'account-' + Math.random().toString(36).slice(2);
+    accountInput.id = uid;
+    accountListbox.id = uid + '-listbox';
+
+    // The account combobox can only hold display text, so the resolved
+    // selection (type/code/name/department) is stashed directly on the
+    // row element — this is what validation.js and collectFormData read.
+    row._departmentCode = null;
+    row._selectedAccount = null;
+
+    row._accountController = AccountSearch.createCombobox({
+      inputEl: accountInput,
+      clearBtnEl: accountClearBtn,
+      listboxEl: accountListbox,
+      wrapperEl: row.querySelector('.combobox'),
+      emptyMessage: 'No matching accounts.',
+      getResults: function (query) {
+        var deptCode = row._departmentCode;
+        if (!deptCode) return [];
+
+        var expenseResults = Expenses.search(query, deptCode).map(function (acct) {
+          return {
+            id: 'expense-' + acct.code,
+            label: acct.code + ' - ' + acct.name,
+            group: 'Expense',
+            data: {
+              type: 'expense',
+              code: acct.code,
+              name: acct.name,
+              departmentCode: acct.departmentCode,
+              departmentName: acct.departmentName,
+            },
+          };
+        });
+        var revenueResults = Revenue.search(query, deptCode).map(function (acct) {
+          return {
+            id: 'revenue-' + acct.code,
+            label: acct.code + ' - ' + acct.name,
+            group: 'Revenue',
+            data: {
+              type: 'revenue',
+              code: acct.code,
+              name: acct.name,
+              departmentCode: acct.departmentCode,
+              departmentName: acct.departmentName,
+            },
+          };
+        });
+        return expenseResults.concat(revenueResults);
+      },
+      onSelect: function (account) {
+        row._selectedAccount = account;
+        rowErrorEls[section].textContent = '';
+        accountInput.removeAttribute('aria-invalid');
+      },
+    });
+    row._accountController.setDisabled(true);
+
     accountInput.addEventListener('input', function () {
       rowErrorEls[section].textContent = '';
-      accountInput.removeAttribute('aria-invalid');
     });
 
     amountInput.addEventListener('input', function () {
@@ -97,7 +323,9 @@
   }
 
   function addRow(section) {
-    tableBodies[section].appendChild(createRow(section));
+    var row = createRow(section);
+    tableBodies[section].appendChild(row);
+    applyRowDepartmentState(row, getCurrentDepartmentCode(section), false);
     updateRemoveButtons(section);
     updateTotal(section);
   }
@@ -157,6 +385,7 @@
         r.closest('.radio-option').classList.toggle('is-checked', r.checked);
       });
       amendmentErrorEl.textContent = '';
+      renderDepartmentSection();
     });
   });
 
@@ -182,9 +411,35 @@
       firstInvalidEl = firstInvalidEl || amendmentRadios[0];
     }
 
+    if (amendmentOk && departmentMode === AmendmentRules.SINGLE) {
+      var singleOk = Validation.validateDepartmentSelection(
+        departmentSelections.single, departmentControllers.single.errorEl, 'Select a department.'
+      );
+      if (!singleOk) {
+        isValid = false;
+        firstInvalidEl = firstInvalidEl || departmentControllers.single.inputEl;
+      }
+    } else if (amendmentOk && departmentMode === AmendmentRules.DUAL) {
+      var fromOk = Validation.validateDepartmentSelection(
+        departmentSelections.from, departmentControllers.from.errorEl, 'Select the Transfer From department.'
+      );
+      var toOk = Validation.validateDepartmentSelection(
+        departmentSelections.to, departmentControllers.to.errorEl, 'Select the Transfer To department.'
+      );
+      if (!fromOk) {
+        isValid = false;
+        firstInvalidEl = firstInvalidEl || departmentControllers.from.inputEl;
+      }
+      if (!toOk) {
+        isValid = false;
+        firstInvalidEl = firstInvalidEl || departmentControllers.to.inputEl;
+      }
+    }
+
     SECTIONS.forEach(function (section) {
       var rows = getRows(section);
-      var result = Validation.validateTransferRows(rows, SECTION_LABELS[section]);
+      var deptCode = getCurrentDepartmentCode(section);
+      var result = Validation.validateTransferRows(rows, SECTION_LABELS[section], deptCode);
       rowErrorEls[section].textContent = result.message;
       if (!result.isValid) {
         isValid = false;
@@ -201,7 +456,7 @@
 
   function rowToData(row) {
     return {
-      accountNumber: row.querySelector('.account-input').value,
+      account: row._selectedAccount || null,
       amount: row.querySelector('.amount-input').value,
     };
   }
@@ -211,19 +466,32 @@
 
     return {
       date: document.getElementById('date').value,
-      department: document.getElementById('department').value,
       description: document.getElementById('description').value,
       preparedBy: document.getElementById('preparedBy').value,
       title: document.getElementById('title').value,
       amendmentType: checkedRadio ? checkedRadio.value : '',
+      department: departmentSelections.single,
+      departmentFrom: departmentSelections.from,
+      departmentTo: departmentSelections.to,
       transferFrom: getRows('transferFrom').map(rowToData),
       transferTo: getRows('transferTo').map(rowToData),
     };
   }
 
+  // Restores state only (no clearing side effects) — the caller is
+  // responsible for the ordering: department fields must exist before
+  // their selections are applied, and department selections must be
+  // applied before rows are rebuilt so each row picks up the right
+  // governing department code.
+  function applyDepartmentSelection(key, dept) {
+    if (!dept) return;
+    departmentSelections[key] = dept;
+    var controller = departmentControllers[key];
+    if (controller) controller.setSelection({ label: dept.code + ' - ' + dept.name });
+  }
+
   function applyFormData(data) {
     document.getElementById('date').value = data.date || '';
-    document.getElementById('department').value = data.department || '';
     document.getElementById('description').value = data.description || '';
     document.getElementById('preparedBy').value = data.preparedBy || '';
     document.getElementById('title').value = data.title || '';
@@ -233,26 +501,47 @@
       radio.closest('.radio-option').classList.toggle('is-checked', radio.checked);
     });
 
+    var mode = AmendmentRules.getDepartmentMode(data.amendmentType);
+    if (mode) {
+      buildDepartmentFields(mode);
+      if (mode === AmendmentRules.SINGLE) {
+        applyDepartmentSelection('single', data.department);
+      } else {
+        applyDepartmentSelection('from', data.departmentFrom);
+        applyDepartmentSelection('to', data.departmentTo);
+      }
+    } else {
+      resetDepartmentSection();
+    }
+
     SECTIONS.forEach(function (section) {
       var rowsData = Array.isArray(data[section]) && data[section].length > 0
         ? data[section]
-        : [{ accountNumber: '', amount: '' }];
+        : [{ account: null, amount: '' }];
 
       var body = tableBodies[section];
       body.innerHTML = '';
+      var deptCode = getCurrentDepartmentCode(section);
+
       rowsData.forEach(function (rowData) {
         var row = createRow(section);
-        row.querySelector('.account-input').value = rowData.accountNumber || '';
-        row.querySelector('.amount-input').value = rowData.amount || '';
         body.appendChild(row);
+        applyRowDepartmentState(row, deptCode, false);
+
+        if (rowData.account) {
+          row._selectedAccount = rowData.account;
+          row._accountController.setSelection({ label: rowData.account.code + ' - ' + rowData.account.name });
+        }
+        row.querySelector('.amount-input').value = rowData.amount || '';
       });
+
       updateRemoveButtons(section);
       updateTotal(section);
     });
   }
 
   // -----------------------------------------------------------
-  // Status banner
+  // Status banners
   // -----------------------------------------------------------
 
   function showStatus(variant, message) {
@@ -263,6 +552,68 @@
 
   function hideStatus() {
     statusBanner.hidden = true;
+  }
+
+  function showCoaBanner(variant, text) {
+    coaStatusBanner.className = 'banner no-print ' + variant;
+    coaStatusBanner.innerHTML = '';
+    var span = document.createElement('span');
+    span.textContent = text;
+    coaStatusBanner.appendChild(span);
+    coaStatusBanner.hidden = false;
+    return span;
+  }
+
+  function showCoaLoading() {
+    showCoaBanner('banner-info', 'Loading Chart of Accounts...');
+  }
+
+  function showCoaError(err) {
+    showCoaBanner('banner-error', err && err.message ? err.message : 'Could not load the Chart of Accounts.');
+    var retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'btn btn-secondary';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', loadChartOfAccounts);
+    coaStatusBanner.appendChild(retryBtn);
+  }
+
+  function showCoaLoaded() {
+    showCoaBanner('banner-info', 'Chart of Accounts loaded.');
+    var refreshBtn = document.createElement('button');
+    refreshBtn.type = 'button';
+    refreshBtn.className = 'btn btn-ghost';
+    refreshBtn.textContent = 'Refresh Chart of Accounts';
+    refreshBtn.addEventListener('click', handleRefreshCoa);
+    coaStatusBanner.appendChild(refreshBtn);
+  }
+
+  function handleRefreshCoa() {
+    showCoaLoading();
+    GoogleSheets.refresh()
+      .then(function () {
+        return Promise.all([Departments.load(), Expenses.load(), Revenue.load()]);
+      })
+      .then(function () {
+        // Existing selections are left as-is; only subsequent searches
+        // (which read live from Departments/Expenses/Revenue) see the
+        // refreshed data.
+        showCoaLoaded();
+      })
+      .catch(function (err) {
+        showCoaError(err);
+      });
+  }
+
+  function loadChartOfAccounts() {
+    showCoaLoading();
+    return Promise.all([Departments.load(), Expenses.load(), Revenue.load()])
+      .then(function () {
+        showCoaLoaded();
+      })
+      .catch(function (err) {
+        showCoaError(err);
+      });
   }
 
   // -----------------------------------------------------------
@@ -301,6 +652,7 @@
     requiredFields.forEach(function (field) { Validation.setFieldError(field.input, field.error, ''); });
     amendmentErrorEl.textContent = '';
     amendmentRadios.forEach(function (r) { r.closest('.radio-option').classList.remove('is-checked'); });
+    resetDepartmentSection();
     SECTIONS.forEach(function (section) { resetTable(section, INITIAL_ROW_COUNT); });
     hideStatus();
   });
@@ -327,6 +679,13 @@
   function init() {
     SECTIONS.forEach(function (section) { resetTable(section, INITIAL_ROW_COUNT); });
 
+    // Syncs the department section with whatever radio state actually
+    // exists right now (defensive — covers browsers that restore form
+    // state on reload without firing 'change' events).
+    renderDepartmentSection();
+
+    loadChartOfAccounts();
+
     // Automatically surface a saved draft, if one exists, for the user to restore.
     if (Storage.hasDraft()) {
       draftBanner.hidden = false;
@@ -337,6 +696,12 @@
 })(
   window.BudgetApp.Calculations,
   window.BudgetApp.Storage,
+  window.BudgetApp.GoogleSheets,
+  window.BudgetApp.Departments,
+  window.BudgetApp.Expenses,
+  window.BudgetApp.Revenue,
+  window.BudgetApp.AccountSearch,
   window.BudgetApp.Validation,
+  window.BudgetApp.AmendmentRules,
   window.BudgetApp.Print
 );

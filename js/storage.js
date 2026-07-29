@@ -11,7 +11,11 @@ window.BudgetApp = window.BudgetApp || {};
 window.BudgetApp.Storage = (function () {
   'use strict';
 
-  var STORAGE_KEY = 'budgetTransferDraft';
+  // v2: department/account fields changed from free text to structured
+  // { code, name } selections. Bumping the key means any draft saved by
+  // the old free-text version is simply never read back — there's no
+  // sane way to migrate a typed account number into a real selection.
+  var STORAGE_KEY = 'budgetTransferDraft_v2';
 
   function saveDraft(data) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
