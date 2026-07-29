@@ -61,6 +61,22 @@ window.BudgetApp.AccountSearch = (function () {
       inputEl.removeAttribute('aria-activedescendant');
     }
 
+    // The listbox is rendered as position:fixed and re-parented onto
+    // <body> every time it opens. Several ancestors (.card, .table-wrapper)
+    // use CSS overflow for unrelated reasons (rounded corners, horizontal
+    // scroll on narrow screens) — per the CSS spec that also clips
+    // *vertical* overflow of anything still nested inside them, including
+    // absolutely/fixed-positioned descendants. Moving the listbox out to
+    // <body> is the only reliable way to escape that.
+    function positionListbox() {
+      document.body.appendChild(listboxEl);
+      var rect = inputEl.getBoundingClientRect();
+      listboxEl.style.position = 'fixed';
+      listboxEl.style.top = (rect.bottom + 4) + 'px';
+      listboxEl.style.left = rect.left + 'px';
+      listboxEl.style.width = rect.width + 'px';
+    }
+
     function renderResults(query) {
       var items = getResults(query) || [];
       listboxEl.innerHTML = '';
@@ -114,6 +130,7 @@ window.BudgetApp.AccountSearch = (function () {
       }
 
       isOpen = true;
+      positionListbox();
       listboxEl.hidden = false;
       inputEl.setAttribute('aria-expanded', 'true');
     }
@@ -230,10 +247,19 @@ window.BudgetApp.AccountSearch = (function () {
     });
 
     document.addEventListener('click', function (event) {
-      if (isOpen && wrapperEl && !wrapperEl.contains(event.target)) {
+      var clickedWrapper = wrapperEl && wrapperEl.contains(event.target);
+      var clickedListbox = listboxEl.contains(event.target);
+      if (isOpen && !clickedWrapper && !clickedListbox) {
         closeDropdown();
       }
     });
+
+    // The listbox is position:fixed, so it won't track the input if the
+    // page (or a scrollable ancestor) scrolls while it's open — closing
+    // is simpler and safer than repositioning on every scroll event.
+    window.addEventListener('scroll', function () {
+      if (isOpen) closeDropdown();
+    }, true);
 
     if (clearBtnEl) {
       clearBtnEl.hidden = true;
