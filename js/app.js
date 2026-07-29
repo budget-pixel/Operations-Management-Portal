@@ -639,8 +639,15 @@
     coaStatusBanner.appendChild(retryBtn);
   }
 
-  function showCoaLoaded() {
-    showCoaBanner('banner-info', 'Chart of Accounts loaded.');
+  // Counts are shown so a "department has zero accounts" data problem is
+  // visually distinguishable from a "nothing loaded at all" plumbing
+  // problem, without needing to open DevTools.
+  function showCoaLoaded(departmentCount, expenseCount, revenueCount) {
+    var message = 'Chart of Accounts loaded — '
+      + departmentCount + ' department' + (departmentCount === 1 ? '' : 's') + ', '
+      + expenseCount + ' expense account' + (expenseCount === 1 ? '' : 's') + ', '
+      + revenueCount + ' revenue account' + (revenueCount === 1 ? '' : 's') + '.';
+    showCoaBanner('banner-info', message);
     var refreshBtn = document.createElement('button');
     refreshBtn.type = 'button';
     refreshBtn.className = 'btn btn-ghost';
@@ -655,11 +662,11 @@
       .then(function () {
         return Promise.all([Departments.load(), Expenses.load(), Revenue.load()]);
       })
-      .then(function () {
+      .then(function (results) {
         // Existing selections are left as-is; only subsequent searches
         // (which read live from Departments/Expenses/Revenue) see the
         // refreshed data.
-        showCoaLoaded();
+        showCoaLoaded(results[0].length, results[1].length, results[2].length);
       })
       .catch(function (err) {
         showCoaError(err);
@@ -669,8 +676,8 @@
   function loadChartOfAccounts() {
     showCoaLoading();
     return Promise.all([Departments.load(), Expenses.load(), Revenue.load()])
-      .then(function () {
-        showCoaLoaded();
+      .then(function (results) {
+        showCoaLoaded(results[0].length, results[1].length, results[2].length);
       })
       .catch(function (err) {
         showCoaError(err);
