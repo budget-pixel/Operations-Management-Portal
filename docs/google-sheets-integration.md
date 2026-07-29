@@ -18,17 +18,20 @@ order doesn't matter, but the header **text** must match exactly):
 | 205 | Public Works |
 | 310 | Parks & Recreation |
 
-**COA Expenses** (a `Project` column is fine to have — it's ignored)
+**COA Expenses** — if a row already belongs to a specific project, put its
+number in `Project`; leave it blank otherwise. That number becomes
+searchable in the account box, and auto-fills the row's Project field once
+that account is selected.
 
 | Department Code | Expense Object | Expense Object Name | Project |
 |---|---|---|---|
-| 205 | 531100 | Office Supplies | ... |
-| 205 | 552000 | Travel | ... |
-| 310 | 564100 | Computer Equipment | ... |
+| 205 | 531100 | Office Supplies | |
+| 205 | 552000 | Travel | |
+| 310 | 564100 | Computer Equipment | 42150 |
 
 **COA Revenue** — note the different column names on this tab: `Org Code` is
 treated as the department code, `Object Code` as the revenue code, and
-`Name` as the revenue name.
+`Name` as the revenue name. A `Project` column here (if present) is ignored.
 
 | Org Code | Object Code | Name |
 |---|---|---|

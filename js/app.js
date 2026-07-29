@@ -314,10 +314,14 @@
             name: acct.name,
             departmentCode: acct.departmentCode,
             departmentName: acct.departmentName,
+            // A project number already tied to this account in the sheet
+            // takes precedence over whatever's currently typed in the
+            // row's Project field.
+            projectCode: acct.projectCode || '',
           };
           return {
             id: 'expense-' + acct.code,
-            label: buildAccountLabel(departmentDisplayCode, accountData, projectCode),
+            label: buildAccountLabel(departmentDisplayCode, accountData, accountData.projectCode || projectCode),
             group: 'Expense',
             data: accountData,
           };
@@ -343,6 +347,15 @@
         row._selectedAccount = account;
         rowErrorEls[section].textContent = '';
         accountInput.removeAttribute('aria-invalid');
+
+        // If this account already has a project number in the sheet,
+        // fill it in automatically instead of making the preparer retype
+        // a number the chart of accounts already determines.
+        if (account && account.projectCode) {
+          projectInput.value = account.projectCode;
+          projectInput.removeAttribute('aria-invalid');
+          refreshAccountLabel(row, section);
+        }
       },
     });
     row._accountController.setDisabled(true);

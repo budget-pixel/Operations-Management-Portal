@@ -10,12 +10,16 @@
  * Expected tabs and exact header row text:
  *
  *   "COA Departments"  Department Code | Department Name
- *   "COA Expenses"     Department Code | Expense Object | Expense Object Name  (Project is ignored)
- *   "COA Revenue"      Org Code | Object Code | Name
+ *   "COA Expenses"     Department Code | Expense Object | Expense Object Name | Project
+ *   "COA Revenue"      Org Code | Object Code | Name  (Project, if present, is ignored)
  *
  * COA Expenses and COA Revenue don't carry a department *name* column, only
  * a code (Department Code / Org Code) — departmentName comes back blank for
  * those two, which is fine since only departmentCode is used for filtering.
+ *
+ * Some COA Expenses rows are already tied to a specific project number in
+ * their Project column — that comes back as projectCode so the client can
+ * search by it and auto-fill it once that account is selected.
  *
  * See docs/google-sheets-integration.md for deployment steps.
  */
@@ -97,6 +101,9 @@ function mapExpenseRow(record) {
     departmentName: '',
     code: cell(record, 'Expense Object'),
     name: cell(record, 'Expense Object Name'),
+    // Some rows already have a specific project tied to them in the sheet —
+    // blank for the (majority of) rows that don't.
+    projectCode: cell(record, 'Project'),
   };
 }
 

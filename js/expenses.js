@@ -40,14 +40,17 @@ window.BudgetApp.Expenses = (function (GoogleSheets) {
     return match[0] || null;
   }
 
-  // Matches on object code OR name, case-insensitive substring match,
-  // optionally scoped to a single department.
+  // Matches on object code, name, OR project code (when the sheet has one
+  // tied to that row), case-insensitive substring match, optionally scoped
+  // to a single department.
   function search(query, departmentCode) {
     var q = normalize(query);
     var pool = departmentCode ? getByDepartment(departmentCode) : records;
     if (!q) return pool.slice();
     return pool.filter(function (r) {
-      return normalize(r.code).indexOf(q) !== -1 || normalize(r.name).indexOf(q) !== -1;
+      return normalize(r.code).indexOf(q) !== -1
+        || normalize(r.name).indexOf(q) !== -1
+        || (r.projectCode && normalize(r.projectCode).indexOf(q) !== -1);
     });
   }
 
