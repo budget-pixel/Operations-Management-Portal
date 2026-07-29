@@ -1,29 +1,25 @@
 /* =============================================================
-   Budget Amendment Request — script.js
-   Plain vanilla JavaScript. No frameworks, no build step.
+   app.js
+   Main entry point: DOM references, Transfer table row
+   management, event wiring, and page initialization.
 
-   Responsibilities:
-     - Render/manage the Transfer From & Transfer To row tables
-     - Calculate and display live totals
-     - Validate required fields before submission
-     - Save / load / clear a draft in localStorage
-     - Prepare the page for printing
+   Depends on (must load first): Calculations, Storage,
+   Validation, Print — see index.html for load order.
    ============================================================= */
 
-(function () {
+(function (Calculations, Storage, Validation, Print) {
   'use strict';
 
-  // -----------------------------------------------------------
-  // Constants & element references
-  // -----------------------------------------------------------
-
-  var STORAGE_KEY = 'budgetTransferDraft';
   var INITIAL_ROW_COUNT = 5;
   var SECTIONS = ['transferFrom', 'transferTo'];
   var SECTION_LABELS = {
     transferFrom: 'Transfer From',
     transferTo: 'Transfer To',
   };
+
+  // -----------------------------------------------------------
+  // Element references
+  // -----------------------------------------------------------
 
   var form = document.getElementById('budgetForm');
   var rowTemplate = document.getElementById('transferRowTemplate');
@@ -62,33 +58,6 @@
     { input: document.getElementById('title'), error: document.getElementById('title-error'), message: 'Title is required.' },
   ];
 
-  var currencyFormatter = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  });
-
-  // -----------------------------------------------------------
-  // Currency helpers
-  // -----------------------------------------------------------
-
-  // Strips everything but digits/decimal/minus and returns a number (0 if unparsable).
-  function parseAmount(value) {
-    var numeric = Number(String(value).replace(/[^0-9.-]/g, ''));
-    return isFinite(numeric) ? numeric : 0;
-  }
-
-  // A row "counts" only if it has a positive numeric amount.
-  function isValidAmount(value) {
-    var trimmed = String(value).trim();
-    if (trimmed === '') return false;
-    var numeric = Number(trimmed.replace(/[^0-9.-]/g, ''));
-    return isFinite(numeric) && numeric > 0;
-  }
-
-  function formatCurrency(amount) {
-    return currencyFormatter.format(amount);
-  }
-
   // -----------------------------------------------------------
   // Transfer table row management
   // -----------------------------------------------------------
@@ -114,8 +83,8 @@
 
     // Normalize the amount to two decimal places once the user leaves the field.
     amountInput.addEventListener('blur', function () {
-      if (isValidAmount(amountInput.value)) {
-        amountInput.value = parseAmount(amountInput.value).toFixed(2);
+      if (Calculations.isValidAmount(amountInput.value)) {
+        amountInput.value = Calculations.parseAmount(amountInput.value).toFixed(2);
         updateTotal(section);
       }
     });
@@ -165,8 +134,7 @@
       tableBodies[section].querySelectorAll('.amount-input'),
       function (input) { return input.value; }
     );
-    var total = amounts.reduce(function (sum, value) { return sum + parseAmount(value); }, 0);
-    totalEls[section].textContent = formatCurrency(total);
+    totalEls[section].textContent = Calculations.formatCurrency(Calculations.sumAmounts(amounts));
   }
 
   function getRows(section) {
@@ -174,22 +142,12 @@
   }
 
   // -----------------------------------------------------------
-  // Field-level error helpers
+  // Live error clearing as the user types/selects
   // -----------------------------------------------------------
-
-  function setFieldError(inputEl, errorEl, message) {
-    if (message) {
-      inputEl.setAttribute('aria-invalid', 'true');
-      errorEl.textContent = message;
-    } else {
-      inputEl.removeAttribute('aria-invalid');
-      errorEl.textContent = '';
-    }
-  }
 
   requiredFields.forEach(function (field) {
     field.input.addEventListener('input', function () {
-      setFieldError(field.input, field.error, '');
+      Validation.setFieldError(field.input, field.error, '');
     });
   });
 
@@ -203,68 +161,32 @@
   });
 
   // -----------------------------------------------------------
-  // Validation
+  // Form-wide validation (delegates the actual checks to Validation)
   // -----------------------------------------------------------
 
-  // Validates every required field and both transfer tables.
-  // Returns { isValid, firstInvalidEl } so the caller can focus the first problem.
   function validateForm() {
     var isValid = true;
     var firstInvalidEl = null;
 
     requiredFields.forEach(function (field) {
-      if (!field.input.value.trim()) {
-        setFieldError(field.input, field.error, field.message);
+      var ok = Validation.validateRequiredField(field.input, field.error, field.message);
+      if (!ok) {
         isValid = false;
         firstInvalidEl = firstInvalidEl || field.input;
-      } else {
-        setFieldError(field.input, field.error, '');
       }
     });
 
-    var amendmentChecked = amendmentRadios.some(function (r) { return r.checked; });
-    if (!amendmentChecked) {
-      amendmentErrorEl.textContent = 'Select an amendment type.';
+    var amendmentOk = Validation.validateAmendmentType(amendmentRadios, amendmentErrorEl);
+    if (!amendmentOk) {
       isValid = false;
       firstInvalidEl = firstInvalidEl || amendmentRadios[0];
-    } else {
-      amendmentErrorEl.textContent = '';
     }
 
     SECTIONS.forEach(function (section) {
       var rows = getRows(section);
-      var hasCompleteRow = false;
-      var rowMessage = '';
-
-      rows.forEach(function (row) {
-        var accountInput = row.querySelector('.account-input');
-        var amountInput = row.querySelector('.amount-input');
-        var hasAccount = accountInput.value.trim() !== '';
-        var hasAmount = amountInput.value.trim() !== '';
-
-        accountInput.removeAttribute('aria-invalid');
-        amountInput.removeAttribute('aria-invalid');
-
-        if (hasAccount && !hasAmount) {
-          amountInput.setAttribute('aria-invalid', 'true');
-          rowMessage = 'Enter an amount for every account number.';
-        } else if (hasAmount && !hasAccount) {
-          accountInput.setAttribute('aria-invalid', 'true');
-          rowMessage = 'Enter an account number for every amount.';
-        } else if (hasAccount && hasAmount) {
-          if (isValidAmount(amountInput.value)) {
-            hasCompleteRow = true;
-          } else {
-            amountInput.setAttribute('aria-invalid', 'true');
-            rowMessage = 'Enter a valid amount greater than 0.';
-          }
-        }
-      });
-
-      var finalMessage = rowMessage || (hasCompleteRow ? '' : 'Add at least one complete ' + SECTION_LABELS[section] + ' account and amount.');
-      rowErrorEls[section].textContent = finalMessage;
-
-      if (finalMessage) {
+      var result = Validation.validateTransferRows(rows, SECTION_LABELS[section]);
+      rowErrorEls[section].textContent = result.message;
+      if (!result.isValid) {
         isValid = false;
         firstInvalidEl = firstInvalidEl || rows[0].querySelector('.account-input');
       }
@@ -274,7 +196,7 @@
   }
 
   // -----------------------------------------------------------
-  // Collecting / applying form data
+  // Collecting / applying form data (used by Save Draft / Restore Draft)
   // -----------------------------------------------------------
 
   function rowToData(row) {
@@ -330,29 +252,6 @@
   }
 
   // -----------------------------------------------------------
-  // Draft persistence (localStorage)
-  // -----------------------------------------------------------
-
-  function saveDraft() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(collectFormData()));
-    showStatus('banner-info', 'Draft saved at ' + new Date().toLocaleTimeString() + '.');
-  }
-
-  function loadDraft() {
-    var raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch (err) {
-      return null;
-    }
-  }
-
-  function clearDraft() {
-    localStorage.removeItem(STORAGE_KEY);
-  }
-
-  // -----------------------------------------------------------
   // Status banner
   // -----------------------------------------------------------
 
@@ -385,10 +284,13 @@
     }
   });
 
-  saveDraftBtn.addEventListener('click', saveDraft);
+  saveDraftBtn.addEventListener('click', function () {
+    Storage.saveDraft(collectFormData());
+    showStatus('banner-info', 'Draft saved at ' + new Date().toLocaleTimeString() + '.');
+  });
 
   printBtn.addEventListener('click', function () {
-    window.print();
+    Print.printForm();
   });
 
   clearBtn.addEventListener('click', function () {
@@ -396,7 +298,7 @@
     if (!confirmed) return;
 
     form.reset();
-    requiredFields.forEach(function (field) { setFieldError(field.input, field.error, ''); });
+    requiredFields.forEach(function (field) { Validation.setFieldError(field.input, field.error, ''); });
     amendmentErrorEl.textContent = '';
     amendmentRadios.forEach(function (r) { r.closest('.radio-option').classList.remove('is-checked'); });
     SECTIONS.forEach(function (section) { resetTable(section, INITIAL_ROW_COUNT); });
@@ -408,13 +310,13 @@
   });
 
   restoreDraftBtn.addEventListener('click', function () {
-    var data = loadDraft();
+    var data = Storage.loadDraft();
     if (data) applyFormData(data);
     draftBanner.hidden = true;
   });
 
   discardDraftBtn.addEventListener('click', function () {
-    clearDraft();
+    Storage.clearDraft();
     draftBanner.hidden = true;
   });
 
@@ -426,10 +328,15 @@
     SECTIONS.forEach(function (section) { resetTable(section, INITIAL_ROW_COUNT); });
 
     // Automatically surface a saved draft, if one exists, for the user to restore.
-    if (loadDraft()) {
+    if (Storage.hasDraft()) {
       draftBanner.hidden = false;
     }
   }
 
   init();
-})();
+})(
+  window.BudgetApp.Calculations,
+  window.BudgetApp.Storage,
+  window.BudgetApp.Validation,
+  window.BudgetApp.Print
+);

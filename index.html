@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Budget Amendment Request</title>
   <meta name="description" content="Submit and manage budget amendment / transfer requests." />
-  <link rel="icon" type="image/png" href="assets/logo-placeholder.png" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="assets/images/logo-placeholder.png" />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
 
   <header class="site-header">
     <div class="header-inner">
-      <img class="logo" src="assets/logo-placeholder.png" alt="County office logo placeholder" />
+      <img class="logo" src="assets/images/logo-placeholder.png" alt="County office logo placeholder" />
       <div>
         <p class="eyebrow">Office of Management and Budget</p>
         <h1>Budget Amendment Request</h1>
@@ -212,6 +212,12 @@
     </tr>
   </template>
 
-  <script src="script.js"></script>
+  <!-- Load order matters: app.js expects the other modules to already be
+       attached to window.BudgetApp by the time it runs. -->
+  <script src="js/calculations.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/validation.js"></script>
+  <script src="js/print.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

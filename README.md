@@ -30,18 +30,44 @@ That's it — there is nothing to install and no server required.
 ```
 Budget-Transfer-Request/
 │
-├── index.html                  Form markup
-├── styles.css                  All styling (responsive + print)
-├── script.js                   Validation, totals, drafts, printing
-├── README.md                   This file
-└── assets/
-    └── logo-placeholder.png    Generic header logo placeholder
+├── index.html
+├── css/
+│   └── styles.css              All styling (responsive + print)
+├── js/
+│   ├── app.js                  DOM wiring, table rows, event handlers, init
+│   ├── validation.js           Field/form validation
+│   ├── calculations.js         Currency parsing/formatting, totals
+│   ├── storage.js               Draft save/load/clear (Local Storage)
+│   └── print.js                Print handling
+├── assets/
+│   ├── images/
+│   │   └── logo-placeholder.png  Generic header logo placeholder
+│   └── icons/                  Reserved for future standalone icon assets
+├── forms/                      Reserved for future additional form variants
+├── docs/                       Reserved for future project documentation
+└── README.md                   This file
 ```
+
+### Module dependencies
+
+There's no bundler, so the scripts are plain `<script>` tags that share a
+single `window.BudgetApp` namespace instead of ES module imports (ES
+modules are blocked by CORS when a page is opened directly via `file://`
+in Chrome). Each module attaches itself to `window.BudgetApp.<Name>`, and
+`index.html` loads them in dependency order:
+
+```
+calculations.js → storage.js → validation.js → print.js → app.js
+```
+
+`app.js` is the only one that touches the DOM's event wiring/initialization;
+the other four are self-contained and could be reused or unit tested on
+their own.
 
 ## Notes
 
 - The header logo is a generic placeholder icon, not an official county seal.
-  Swap `assets/logo-placeholder.png` for a real logo whenever you're ready.
+  Swap `assets/images/logo-placeholder.png` for a real logo whenever you're ready.
 - There is no backend — "Submit" validates the form and displays a
   confirmation message, but does not send data anywhere. Use **Print** to
   produce a physical/PDF copy for routing and signatures.
