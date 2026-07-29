@@ -19,7 +19,7 @@ window.BudgetApp.GoogleSheets = (function () {
 
   // Paste your deployed Apps Script Web App URL here.
   // See docs/google-sheets-integration.md for how to get one.
-  var SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxYjN-vJIZfjoY0gfpxw65F1ePhrfvdH_8ynqPCAD-S6PRnFpsYhFNZeHWm1Y1qsvF5Ag/exec';
+  var SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbz1lQBstvwVbbqvcfk7vEgp3ccp-FXUb9xAr7a4LIolf0gR2RZNYvXDJgy1NiqsZexvQA/exec';
 
   var CACHE_KEY = 'budgetAppCoaCache_v1';
 
