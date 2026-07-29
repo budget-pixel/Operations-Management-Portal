@@ -601,10 +601,63 @@ textarea:disabled {
   gap: 0.5rem;
 }
 
-/* ---------- Print styles ---------- */
+/* ---------- Print view ----------
+   A separate, compact clerical entry view — see #printView in index.html
+   and populatePrintView() in app.js. Deliberately not just a trimmed-down
+   copy of the on-screen form: only filled-in account lines print, and
+   there's no interactive chrome to work around. */
 
 .print-only {
   display: none;
+}
+
+.print-header h1 {
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.print-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.5rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.print-field-label {
+  font-weight: 700;
+}
+
+.print-tables {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.print-tables h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.4rem;
+}
+
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.print-table th,
+.print-table td {
+  border: 1px solid #999999;
+  padding: 0.25rem 0.4rem;
+  text-align: left;
+}
+
+.print-total {
+  margin-top: 0.35rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-align: right;
 }
 
 @media print {
@@ -620,37 +673,20 @@ textarea:disabled {
     display: block;
   }
 
-  .site-header {
-    background: none;
-    color: #000000;
-    padding: 0 0 1rem;
-    border-bottom: 2px solid #000000;
+  .site-header,
+  #budgetForm {
+    display: none !important;
   }
 
-  .eyebrow {
-    color: #333333;
-  }
-
-  .logo {
-    box-shadow: none;
+  /* Combobox listboxes are re-parented onto <body> when opened (see
+     accountSearch.js), so they can end up outside #budgetForm — force
+     them closed for print regardless of where they currently live. */
+  .combobox-listbox {
+    display: none !important;
   }
 
   .page {
     max-width: 100%;
-    padding: 1rem 0 0;
-  }
-
-  .card {
-    box-shadow: none;
-    border: 1px solid #999999;
-    break-inside: avoid;
-  }
-
-  .tables-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .combobox-listbox {
-    display: none !important;
+    padding: 0.5rem 0 0;
   }
 }

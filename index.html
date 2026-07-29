@@ -201,6 +201,55 @@
       </div>
 
     </form>
+
+    <!-- Print-only clerical entry view — populated by app.js's
+         populatePrintView() right before window.print() is called.
+         Deliberately separate from the on-screen form: only filled-in
+         account lines are included, and there's no interactive/empty
+         cruft (comboboxes, add/remove buttons, unfilled rows, full
+         amendment-type descriptions). -->
+    <div id="printView" class="print-only">
+      <div class="print-header">
+        <h1>Budget Amendment Request</h1>
+        <div class="print-meta-row">
+          <span><span class="print-field-label">Date:</span> <span id="printDate"></span></span>
+          <span><span class="print-field-label">Prepared By:</span> <span id="printPreparedBy"></span></span>
+          <span><span class="print-field-label">Title:</span> <span id="printTitle"></span></span>
+        </div>
+        <div class="print-meta-row">
+          <span><span class="print-field-label">Amendment Type:</span> <span id="printAmendmentType"></span></span>
+        </div>
+        <div class="print-meta-row">
+          <span id="printDepartmentLine"></span>
+        </div>
+        <div class="print-meta-row" id="printDescriptionRow" hidden>
+          <span><span class="print-field-label">Description:</span> <span id="printDescription"></span></span>
+        </div>
+      </div>
+
+      <div class="print-tables">
+        <div>
+          <h2>Transfer From</h2>
+          <table class="print-table">
+            <thead>
+              <tr><th>Account Number</th><th>Description</th><th>Amount</th></tr>
+            </thead>
+            <tbody id="printTransferFromBody"></tbody>
+          </table>
+          <div class="print-total">Total: <span id="printTransferFromTotal"></span></div>
+        </div>
+        <div>
+          <h2>Transfer To</h2>
+          <table class="print-table">
+            <thead>
+              <tr><th>Account Number</th><th>Description</th><th>Amount</th></tr>
+            </thead>
+            <tbody id="printTransferToBody"></tbody>
+          </table>
+          <div class="print-total">Total: <span id="printTransferToTotal"></span></div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- Template for a single Transfer From/To table row. The account cell

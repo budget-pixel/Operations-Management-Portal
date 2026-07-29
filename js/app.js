@@ -53,6 +53,24 @@
   var printBtn = document.getElementById('printBtn');
   var clearBtn = document.getElementById('clearBtn');
 
+  var printEls = {
+    date: document.getElementById('printDate'),
+    preparedBy: document.getElementById('printPreparedBy'),
+    title: document.getElementById('printTitle'),
+    amendmentType: document.getElementById('printAmendmentType'),
+    departmentLine: document.getElementById('printDepartmentLine'),
+    descriptionRow: document.getElementById('printDescriptionRow'),
+    description: document.getElementById('printDescription'),
+    bodies: {
+      transferFrom: document.getElementById('printTransferFromBody'),
+      transferTo: document.getElementById('printTransferToBody'),
+    },
+    totals: {
+      transferFrom: document.getElementById('printTransferFromTotal'),
+      transferTo: document.getElementById('printTransferToTotal'),
+    },
+  };
+
   var amendmentRadios = Array.prototype.slice.call(
     document.querySelectorAll('input[name="amendmentType"]')
   );
@@ -111,13 +129,20 @@
     return '';
   }
 
-  // Builds the full account number shown once an account is selected:
-  // "DeptCode-ObjectCode[-ProjectCode] - Name" — e.g.
-  // "00107000-531100-12345 - Office Supplies". Project code is optional.
-  function buildAccountLabel(departmentDisplayCode, account, projectCode) {
+  // "DeptCode-ObjectCode[-ProjectCode]" — e.g. "00107000-531100-12345".
+  // Project code is optional. Also used by the print view, which needs the
+  // number and the account name in separate columns.
+  function buildAccountNumber(departmentDisplayCode, account, projectCode) {
     var numberParts = [departmentDisplayCode, account.code];
     if (projectCode) numberParts.push(projectCode);
-    return numberParts.filter(Boolean).join('-') + ' - ' + account.name;
+    return numberParts.filter(Boolean).join('-');
+  }
+
+  // Builds the full label shown once an account is selected:
+  // "DeptCode-ObjectCode[-ProjectCode] - Name" — e.g.
+  // "00107000-531100-12345 - Office Supplies".
+  function buildAccountLabel(departmentDisplayCode, account, projectCode) {
+    return buildAccountNumber(departmentDisplayCode, account, projectCode) + ' - ' + account.name;
   }
 
   // Recomputes and re-displays a row's account label (e.g. after the
@@ -702,6 +727,100 @@
   }
 
   // -----------------------------------------------------------
+  // Print view — a separate, compact clerical entry view (see #printView
+  // in index.html), populated fresh from current form state right before
+  // printing. Only rows with a selected account are included.
+  // -----------------------------------------------------------
+
+  function formatPrintDate(isoDate) {
+    if (!isoDate) return '—';
+    // Split/rearrange the "YYYY-MM-DD" string directly rather than going
+    // through `new Date(...)`, which parses that format as UTC midnight
+    // and can display a day off in negative-UTC-offset timezones.
+    var parts = isoDate.split('-');
+    return parts.length === 3 ? (parts[1] + '/' + parts[2] + '/' + parts[0]) : isoDate;
+  }
+
+  function buildPrintDepartmentLine() {
+    if (departmentMode === AmendmentRules.SINGLE) {
+      var dept = departmentSelections.single;
+      return 'Department: ' + (dept ? (dept.code + ' - ' + dept.name) : '—');
+    }
+    if (departmentMode === AmendmentRules.DUAL) {
+      var from = departmentSelections.from;
+      var to = departmentSelections.to;
+      return 'Transfer From Dept: ' + (from ? (from.code + ' - ' + from.name) : '—')
+        + '   |   Transfer To Dept: ' + (to ? (to.code + ' - ' + to.name) : '—');
+    }
+    return '';
+  }
+
+  // Only rows with a resolved account selection print — blank/unused rows
+  // are skipped entirely rather than showing as empty table lines.
+  function populatePrintTable(section) {
+    var body = printEls.bodies[section];
+    body.innerHTML = '';
+
+    var departmentDisplayCode = getCurrentDepartmentDisplayCode(section);
+    var filledRows = getRows(section).filter(function (row) { return row._selectedAccount; });
+
+    filledRows.forEach(function (row) {
+      var account = row._selectedAccount;
+      var projectCode = row.querySelector('.project-input').value.trim();
+      var accountNumber = buildAccountNumber(departmentDisplayCode, account, projectCode);
+      var amount = Calculations.parseAmount(row.querySelector('.amount-input').value);
+
+      var tr = document.createElement('tr');
+
+      var numberCell = document.createElement('td');
+      numberCell.textContent = accountNumber;
+      tr.appendChild(numberCell);
+
+      var nameCell = document.createElement('td');
+      nameCell.textContent = account.name;
+      tr.appendChild(nameCell);
+
+      var amountCell = document.createElement('td');
+      amountCell.textContent = Calculations.formatCurrency(amount);
+      tr.appendChild(amountCell);
+
+      body.appendChild(tr);
+    });
+
+    printEls.totals[section].textContent = totalEls[section].textContent;
+  }
+
+  function populatePrintView() {
+    printEls.date.textContent = formatPrintDate(document.getElementById('date').value);
+    printEls.preparedBy.textContent = document.getElementById('preparedBy').value.trim() || '—';
+    printEls.title.textContent = document.getElementById('title').value.trim() || '—';
+
+    var checkedRadio = amendmentRadios.filter(function (r) { return r.checked; })[0];
+    if (checkedRadio) {
+      var optionEl = checkedRadio.closest('.radio-option');
+      var nameText = optionEl.querySelector('strong').textContent;
+      var statuteEl = optionEl.querySelector('.statute');
+      printEls.amendmentType.textContent = statuteEl ? (nameText + ' ' + statuteEl.textContent) : nameText;
+    } else {
+      printEls.amendmentType.textContent = '—';
+    }
+
+    printEls.departmentLine.textContent = buildPrintDepartmentLine();
+
+    var description = document.getElementById('description').value.trim();
+    if (description) {
+      printEls.description.textContent = description;
+      printEls.descriptionRow.hidden = false;
+    } else {
+      printEls.descriptionRow.hidden = true;
+    }
+
+    SECTIONS.forEach(function (section) {
+      populatePrintTable(section);
+    });
+  }
+
+  // -----------------------------------------------------------
   // Event wiring
   // -----------------------------------------------------------
 
@@ -726,6 +845,7 @@
   });
 
   printBtn.addEventListener('click', function () {
+    populatePrintView();
     Print.printForm();
   });
 
