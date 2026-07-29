@@ -741,18 +741,30 @@
     return parts.length === 3 ? (parts[1] + '/' + parts[2] + '/' + parts[0]) : isoDate;
   }
 
-  function buildPrintDepartmentLine() {
+  // Builds the department line as real DOM nodes (rather than a plain
+  // string) so its label(s) can be bolded the same way as every other
+  // print field's <span class="print-field-label">.
+  function renderPrintDepartmentLine(container) {
+    container.innerHTML = '';
+
+    function appendField(label, value) {
+      var labelEl = document.createElement('span');
+      labelEl.className = 'print-field-label';
+      labelEl.textContent = label + ':';
+      container.appendChild(labelEl);
+      container.appendChild(document.createTextNode(' ' + value));
+    }
+
     if (departmentMode === AmendmentRules.SINGLE) {
       var dept = departmentSelections.single;
-      return 'Department: ' + (dept ? (dept.code + ' - ' + dept.name) : '—');
-    }
-    if (departmentMode === AmendmentRules.DUAL) {
+      appendField('Department', dept ? (dept.code + ' - ' + dept.name) : '—');
+    } else if (departmentMode === AmendmentRules.DUAL) {
       var from = departmentSelections.from;
       var to = departmentSelections.to;
-      return 'Transfer From Dept: ' + (from ? (from.code + ' - ' + from.name) : '—')
-        + '   |   Transfer To Dept: ' + (to ? (to.code + ' - ' + to.name) : '—');
+      appendField('Transfer From Dept', from ? (from.code + ' - ' + from.name) : '—');
+      container.appendChild(document.createTextNode('    '));
+      appendField('Transfer To Dept', to ? (to.code + ' - ' + to.name) : '—');
     }
-    return '';
   }
 
   // Only rows with a resolved account selection print — blank/unused rows
@@ -805,7 +817,7 @@
       printEls.amendmentType.textContent = '—';
     }
 
-    printEls.departmentLine.textContent = buildPrintDepartmentLine();
+    renderPrintDepartmentLine(printEls.departmentLine);
 
     var description = document.getElementById('description').value.trim();
     if (description) {

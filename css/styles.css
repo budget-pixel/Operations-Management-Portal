@@ -642,6 +642,11 @@ textarea:disabled {
 
 .print-table {
   width: 100%;
+  /* Fixed layout + matching <colgroup> widths on both tables (see
+     index.html) so Transfer From/To render with identical column
+     proportions instead of each auto-sizing to its own content — that's
+     what was making the two tables wrap and end up different heights. */
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.8rem;
 }
@@ -649,8 +654,15 @@ textarea:disabled {
 .print-table th,
 .print-table td {
   border: 1px solid #999999;
-  padding: 0.25rem 0.4rem;
+  padding: 0.3rem 0.4rem;
   text-align: left;
+  vertical-align: top;
+  word-wrap: break-word;
+}
+
+.print-table th:last-child,
+.print-table td:last-child {
+  text-align: right;
 }
 
 .print-total {
