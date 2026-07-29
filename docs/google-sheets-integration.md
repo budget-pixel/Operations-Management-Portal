@@ -18,20 +18,25 @@ order doesn't matter, but the header **text** must match exactly):
 | 205 | Public Works |
 | 310 | Parks & Recreation |
 
-**COA Expenses**
+**COA Expenses** (a `Project` column is fine to have — it's ignored)
 
-| Department Code | Department Name | Expense Object Code | Expense Object Name |
+| Department Code | Expense Object | Expense Object Name | Project |
 |---|---|---|---|
-| 205 | Public Works | 531100 | Office Supplies |
-| 205 | Public Works | 552000 | Travel |
-| 310 | Parks & Recreation | 564100 | Computer Equipment |
+| 205 | 531100 | Office Supplies | ... |
+| 205 | 552000 | Travel | ... |
+| 310 | 564100 | Computer Equipment | ... |
 
-**COA Revenue**
+**COA Revenue** — note the different column names on this tab: `Org Code` is
+treated as the department code, `Object Code` as the revenue code, and
+`Name` as the revenue name.
 
-| Department Code | Department Name | Revenue Code | Revenue Name |
-|---|---|---|---|
-| 205 | Public Works | 341100 | Permit Fees |
-| 310 | Parks & Recreation | 361200 | Park Fees |
+| Org Code | Object Code | Name |
+|---|---|---|
+| 205 | 341100 | Permit Fees |
+| 310 | 361200 | Park Fees |
+
+Neither COA Expenses nor COA Revenue needs a department *name* column —
+only the code, which is what accounts are filtered by.
 
 ## 2. Add the Apps Script
 

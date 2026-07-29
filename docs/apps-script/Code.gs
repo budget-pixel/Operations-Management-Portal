@@ -10,8 +10,12 @@
  * Expected tabs and exact header row text:
  *
  *   "COA Departments"  Department Code | Department Name
- *   "COA Expenses"     Department Code | Department Name | Expense Object Code | Expense Object Name
- *   "COA Revenue"       Department Code | Department Name | Revenue Code | Revenue Name
+ *   "COA Expenses"     Department Code | Expense Object | Expense Object Name  (Project is ignored)
+ *   "COA Revenue"      Org Code | Object Code | Name
+ *
+ * COA Expenses and COA Revenue don't carry a department *name* column, only
+ * a code (Department Code / Org Code) — departmentName comes back blank for
+ * those two, which is fine since only departmentCode is used for filtering.
  *
  * See docs/google-sheets-integration.md for deployment steps.
  */
@@ -77,18 +81,19 @@ function mapDepartmentRow(record) {
 function mapExpenseRow(record) {
   return {
     departmentCode: cell(record, 'Department Code'),
-    departmentName: cell(record, 'Department Name'),
-    code: cell(record, 'Expense Object Code'),
+    departmentName: '',
+    code: cell(record, 'Expense Object'),
     name: cell(record, 'Expense Object Name'),
   };
 }
 
 function mapRevenueRow(record) {
   return {
-    departmentCode: cell(record, 'Department Code'),
-    departmentName: cell(record, 'Department Name'),
-    code: cell(record, 'Revenue Code'),
-    name: cell(record, 'Revenue Name'),
+    // Org Code / Object Code / Name are this sheet's actual header names.
+    departmentCode: cell(record, 'Org Code'),
+    departmentName: '',
+    code: cell(record, 'Object Code'),
+    name: cell(record, 'Name'),
   };
 }
 
