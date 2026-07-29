@@ -654,11 +654,15 @@
 
   // Counts are shown so a "department has zero accounts" data problem is
   // visually distinguishable from a "nothing loaded at all" plumbing
-  // problem, without needing to open DevTools.
+  // problem, without needing to open DevTools. The project-code count in
+  // particular tells you whether Code.gs's Project column mapping actually
+  // made it into what the client has, independent of any specific search.
   function showCoaLoaded(departmentCount, expenseCount, revenueCount) {
+    var projectCount = Expenses.getAll().filter(function (account) { return account.projectCode; }).length;
     var message = 'Chart of Accounts loaded — '
       + departmentCount + ' department' + (departmentCount === 1 ? '' : 's') + ', '
-      + expenseCount + ' expense account' + (expenseCount === 1 ? '' : 's') + ', '
+      + expenseCount + ' expense account' + (expenseCount === 1 ? '' : 's')
+      + ' (' + projectCount + ' with a project code), '
       + revenueCount + ' revenue account' + (revenueCount === 1 ? '' : 's') + '.';
     showCoaBanner('banner-info', message);
     var refreshBtn = document.createElement('button');
