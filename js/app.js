@@ -76,15 +76,22 @@
   var departmentSelections = { single: null, from: null, to: null };
   var departmentControllers = {};
 
-  // Returns the normalized matchCode (not the padded display code) that
-  // governs a section's account filtering — see Code.gs's normalizeDeptCode.
+  // Prefers the normalized matchCode (see Code.gs's normalizeDeptCode) for
+  // account filtering, but falls back to the padded display code if an
+  // older deployed Apps Script hasn't been updated to send matchCode yet —
+  // degrades to "still searchable" instead of hard-disabling the fields.
+  function getDeptMatchCode(dept) {
+    if (!dept) return null;
+    return dept.matchCode || dept.code || null;
+  }
+
   function getCurrentDepartmentCode(section) {
     if (departmentMode === AmendmentRules.SINGLE) {
-      return departmentSelections.single ? departmentSelections.single.matchCode : null;
+      return getDeptMatchCode(departmentSelections.single);
     }
     if (departmentMode === AmendmentRules.DUAL) {
       var selection = section === 'transferFrom' ? departmentSelections.from : departmentSelections.to;
-      return selection ? selection.matchCode : null;
+      return getDeptMatchCode(selection);
     }
     return null;
   }
@@ -160,19 +167,19 @@
       departmentControllers = {
         single: mountDepartmentField('Department', function (dept) {
           departmentSelections.single = dept;
-          refreshAccountFilters('transferFrom', dept ? dept.matchCode : null);
-          refreshAccountFilters('transferTo', dept ? dept.matchCode : null);
+          refreshAccountFilters('transferFrom', getDeptMatchCode(dept));
+          refreshAccountFilters('transferTo', getDeptMatchCode(dept));
         }),
       };
     } else {
       departmentControllers = {
         from: mountDepartmentField('Transfer From Department', function (dept) {
           departmentSelections.from = dept;
-          refreshAccountFilters('transferFrom', dept ? dept.matchCode : null);
+          refreshAccountFilters('transferFrom', getDeptMatchCode(dept));
         }),
         to: mountDepartmentField('Transfer To Department', function (dept) {
           departmentSelections.to = dept;
-          refreshAccountFilters('transferTo', dept ? dept.matchCode : null);
+          refreshAccountFilters('transferTo', getDeptMatchCode(dept));
         }),
       };
     }
