@@ -399,6 +399,14 @@ textarea:disabled {
   min-width: 220px;
 }
 
+.project-cell {
+  min-width: 90px;
+}
+
+.project-input {
+  width: 100%;
+}
+
 /* ---------- Transfer tables ---------- */
 
 .table-wrapper {
@@ -408,7 +416,7 @@ textarea:disabled {
 .transfer-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 360px;
+  min-width: 460px;
 }
 
 .transfer-table th {

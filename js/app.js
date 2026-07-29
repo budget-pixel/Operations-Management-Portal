@@ -96,6 +96,41 @@
     return null;
   }
 
+  // The padded code as entered in the spreadsheet (e.g. "00107000") — used
+  // to build the account number shown to the user, as opposed to
+  // getCurrentDepartmentCode()'s normalized matchCode, which is only for
+  // filtering.
+  function getCurrentDepartmentDisplayCode(section) {
+    if (departmentMode === AmendmentRules.SINGLE) {
+      return departmentSelections.single ? departmentSelections.single.code : '';
+    }
+    if (departmentMode === AmendmentRules.DUAL) {
+      var selection = section === 'transferFrom' ? departmentSelections.from : departmentSelections.to;
+      return selection ? selection.code : '';
+    }
+    return '';
+  }
+
+  // Builds the full account number shown once an account is selected:
+  // "DeptCode-ObjectCode[-ProjectCode] - Name" — e.g.
+  // "00107000-531100-12345 - Office Supplies". Project code is optional.
+  function buildAccountLabel(departmentDisplayCode, account, projectCode) {
+    var numberParts = [departmentDisplayCode, account.code];
+    if (projectCode) numberParts.push(projectCode);
+    return numberParts.filter(Boolean).join('-') + ' - ' + account.name;
+  }
+
+  // Recomputes and re-displays a row's account label (e.g. after the
+  // project code changes) without touching row._selectedAccount or firing
+  // onSelect again.
+  function refreshAccountLabel(row, section) {
+    if (!row._selectedAccount) return;
+    var departmentDisplayCode = getCurrentDepartmentDisplayCode(section);
+    var projectCode = row.querySelector('.project-input').value.trim();
+    var label = buildAccountLabel(departmentDisplayCode, row._selectedAccount, projectCode);
+    row._accountController.setSelection({ label: label });
+  }
+
   // Clones the department combobox template, wires it to Departments.search,
   // and appends it to departmentFieldsContainer.
   function mountDepartmentField(labelText, onSelectDepartment) {
@@ -245,6 +280,7 @@
     var accountInput = row.querySelector('.account-input');
     var accountClearBtn = row.querySelector('.combobox-clear');
     var accountListbox = row.querySelector('.combobox-listbox');
+    var projectInput = row.querySelector('.project-input');
     var amountInput = row.querySelector('.amount-input');
     var removeBtn = row.querySelector('.remove-row-btn');
 
@@ -268,32 +304,37 @@
         var deptCode = row._departmentCode;
         if (!deptCode) return [];
 
+        var departmentDisplayCode = getCurrentDepartmentDisplayCode(section);
+        var projectCode = projectInput.value.trim();
+
         var expenseResults = Expenses.search(query, deptCode).map(function (acct) {
+          var accountData = {
+            type: 'expense',
+            code: acct.code,
+            name: acct.name,
+            departmentCode: acct.departmentCode,
+            departmentName: acct.departmentName,
+          };
           return {
             id: 'expense-' + acct.code,
-            label: acct.code + ' - ' + acct.name,
+            label: buildAccountLabel(departmentDisplayCode, accountData, projectCode),
             group: 'Expense',
-            data: {
-              type: 'expense',
-              code: acct.code,
-              name: acct.name,
-              departmentCode: acct.departmentCode,
-              departmentName: acct.departmentName,
-            },
+            data: accountData,
           };
         });
         var revenueResults = Revenue.search(query, deptCode).map(function (acct) {
+          var accountData = {
+            type: 'revenue',
+            code: acct.code,
+            name: acct.name,
+            departmentCode: acct.departmentCode,
+            departmentName: acct.departmentName,
+          };
           return {
             id: 'revenue-' + acct.code,
-            label: acct.code + ' - ' + acct.name,
+            label: buildAccountLabel(departmentDisplayCode, accountData, projectCode),
             group: 'Revenue',
-            data: {
-              type: 'revenue',
-              code: acct.code,
-              name: acct.name,
-              departmentCode: acct.departmentCode,
-              departmentName: acct.departmentName,
-            },
+            data: accountData,
           };
         });
         return expenseResults.concat(revenueResults);
@@ -308,6 +349,14 @@
 
     accountInput.addEventListener('input', function () {
       rowErrorEls[section].textContent = '';
+    });
+
+    // Project code doesn't change which account is selected, only how its
+    // number is displayed — refresh the label in place, no re-selection.
+    projectInput.addEventListener('input', function () {
+      rowErrorEls[section].textContent = '';
+      projectInput.removeAttribute('aria-invalid');
+      refreshAccountLabel(row, section);
     });
 
     amountInput.addEventListener('input', function () {
@@ -466,6 +515,7 @@
   function rowToData(row) {
     return {
       account: row._selectedAccount || null,
+      projectCode: row.querySelector('.project-input').value.trim(),
       amount: row.querySelector('.amount-input').value,
     };
   }
@@ -537,9 +587,11 @@
         body.appendChild(row);
         applyRowDepartmentState(row, deptCode, false);
 
+        row.querySelector('.project-input').value = rowData.projectCode || '';
+
         if (rowData.account) {
           row._selectedAccount = rowData.account;
-          row._accountController.setSelection({ label: rowData.account.code + ' - ' + rowData.account.name });
+          refreshAccountLabel(row, section);
         }
         row.querySelector('.amount-input').value = rowData.amount || '';
       });

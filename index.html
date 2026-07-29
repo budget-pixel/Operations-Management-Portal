@@ -148,6 +148,7 @@
                 <thead>
                   <tr>
                     <th>Account</th>
+                    <th>Project</th>
                     <th>Amount</th>
                     <th class="no-print"><span class="sr-only">Remove</span></th>
                   </tr>
@@ -172,6 +173,7 @@
                 <thead>
                   <tr>
                     <th>Account</th>
+                    <th>Project</th>
                     <th>Amount</th>
                     <th class="no-print"><span class="sr-only">Remove</span></th>
                   </tr>
@@ -213,6 +215,10 @@
           <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
           <ul class="combobox-listbox" role="listbox" hidden></ul>
         </div>
+      </td>
+      <td class="project-cell">
+        <label class="sr-only">Project code (optional, 10000–99999)</label>
+        <input type="text" class="project-input" inputmode="numeric" maxlength="5" placeholder="Optional" aria-label="Project code" />
       </td>
       <td>
         <label class="sr-only">Amount</label>

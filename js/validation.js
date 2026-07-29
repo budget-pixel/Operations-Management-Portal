@@ -49,6 +49,13 @@ window.BudgetApp.Validation = (function (Calculations) {
     return true;
   }
 
+  // Project code is optional, but when present must be a plain 5-digit
+  // number in the 10000-99999 range (not just any 5-character string —
+  // e.g. "01234" has 5 digits but is numerically 1234, out of range).
+  function isValidProjectCode(value) {
+    return /^[0-9]{5}$/.test(value) && Number(value) >= 10000 && Number(value) <= 99999;
+  }
+
   // Validates one Transfer From/To table's rows in place (sets aria-invalid
   // on offending inputs) and returns a summary the caller can display.
   //
@@ -63,12 +70,16 @@ window.BudgetApp.Validation = (function (Calculations) {
     rows.forEach(function (row) {
       var accountInput = row.querySelector('.account-input');
       var amountInput = row.querySelector('.amount-input');
+      var projectInput = row.querySelector('.project-input');
       var selection = row._selectedAccount || null;
       var hasTypedText = accountInput.value.trim() !== '';
       var hasAmount = amountInput.value.trim() !== '';
+      var projectValue = projectInput.value.trim();
+      var rowIsComplete = false;
 
       accountInput.removeAttribute('aria-invalid');
       amountInput.removeAttribute('aria-invalid');
+      projectInput.removeAttribute('aria-invalid');
 
       if (hasTypedText && !selection) {
         accountInput.setAttribute('aria-invalid', 'true');
@@ -86,12 +97,20 @@ window.BudgetApp.Validation = (function (Calculations) {
         message = 'Select an account for every amount entered.';
       } else if (selection && hasAmount) {
         if (Calculations.isValidAmount(amountInput.value)) {
-          hasCompleteRow = true;
+          rowIsComplete = true;
         } else {
           amountInput.setAttribute('aria-invalid', 'true');
           message = 'Enter a valid amount greater than 0.';
         }
       }
+
+      if (projectValue && !isValidProjectCode(projectValue)) {
+        projectInput.setAttribute('aria-invalid', 'true');
+        message = 'Project code must be a number between 10000 and 99999.';
+        rowIsComplete = false;
+      }
+
+      if (rowIsComplete) hasCompleteRow = true;
     });
 
     if (!message && !hasCompleteRow) {
