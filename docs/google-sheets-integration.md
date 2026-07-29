@@ -96,3 +96,10 @@ redeploy the Apps Script for data edits, only if you change `Code.gs` itself.
   require a **new deployment** (Deploy → Manage deployments → Edit → New
   version) to take effect; saving alone isn't enough for an existing
   deployment's URL to pick up changes.
+- **Department search works, but its account dropdowns show nothing** —
+  department codes are often entered with leading zeros in COA Departments
+  (e.g. `00107000`) but without them on COA Expenses/COA Revenue rows (e.g.
+  `107000`). `Code.gs` normalizes both sides (strips leading zeros) before
+  comparing, so this should already be handled — if it's still happening,
+  double-check the department code actually appears (in any zero-padded
+  form) on the corresponding Expense/Revenue rows at all.

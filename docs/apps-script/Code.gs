@@ -71,16 +71,26 @@ function cell(record, header) {
   return value === undefined || value === null ? '' : String(value).trim();
 }
 
+// COA Departments codes are entered with leading zeros (e.g. "00107000"),
+// but the same code appears without them on COA Expenses/COA Revenue rows
+// (e.g. "107000") — normalizing both sides the same way here means the
+// client can match them with plain string equality without knowing about
+// the inconsistency.
+function normalizeDeptCode(value) {
+  var stripped = String(value).trim().replace(/^0+/, '');
+  return stripped === '' ? '0' : stripped;
+}
+
 function mapDepartmentRow(record) {
   return {
-    code: cell(record, 'Department Code'),
+    code: normalizeDeptCode(cell(record, 'Department Code')),
     name: cell(record, 'Department Name'),
   };
 }
 
 function mapExpenseRow(record) {
   return {
-    departmentCode: cell(record, 'Department Code'),
+    departmentCode: normalizeDeptCode(cell(record, 'Department Code')),
     departmentName: '',
     code: cell(record, 'Expense Object'),
     name: cell(record, 'Expense Object Name'),
@@ -90,7 +100,7 @@ function mapExpenseRow(record) {
 function mapRevenueRow(record) {
   return {
     // Org Code / Object Code / Name are this sheet's actual header names.
-    departmentCode: cell(record, 'Org Code'),
+    departmentCode: normalizeDeptCode(cell(record, 'Org Code')),
     departmentName: '',
     code: cell(record, 'Object Code'),
     name: cell(record, 'Name'),
