@@ -73,17 +73,20 @@ function cell(record, header) {
 
 // COA Departments codes are entered with leading zeros (e.g. "00107000"),
 // but the same code appears without them on COA Expenses/COA Revenue rows
-// (e.g. "107000") — normalizing both sides the same way here means the
-// client can match them with plain string equality without knowing about
-// the inconsistency.
+// (e.g. "107000"). department.code keeps the original padded value (it's
+// the real account number staff enter elsewhere, and must display exactly
+// as-is) — matchCode is the normalized value used only for joining against
+// Expenses/Revenue, never shown to the user.
 function normalizeDeptCode(value) {
   var stripped = String(value).trim().replace(/^0+/, '');
   return stripped === '' ? '0' : stripped;
 }
 
 function mapDepartmentRow(record) {
+  var rawCode = cell(record, 'Department Code');
   return {
-    code: normalizeDeptCode(cell(record, 'Department Code')),
+    code: rawCode,
+    matchCode: normalizeDeptCode(rawCode),
     name: cell(record, 'Department Name'),
   };
 }
