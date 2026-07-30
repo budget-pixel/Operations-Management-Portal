@@ -731,6 +731,9 @@ textarea:disabled {
 .print-table th:last-child,
 .print-table td:last-child {
   text-align: right;
+  /* Amount must never wrap mid-number (e.g. "$100,000" / ".00" splitting
+     across lines) — only the Description column should wrap. */
+  white-space: nowrap;
 }
 
 .print-total {
