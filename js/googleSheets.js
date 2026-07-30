@@ -31,6 +31,13 @@ window.BudgetApp.GoogleSheets = (function () {
     return /^https:\/\/script\.google\.com\//.test(SHEETS_API_URL);
   }
 
+  // Exposes the same Apps Script Web App URL used for reads so
+  // submission.js can POST a request to it without duplicating this
+  // constant in a second file.
+  function getApiUrl() {
+    return SHEETS_API_URL;
+  }
+
   function readCache() {
     var raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
@@ -105,5 +112,6 @@ window.BudgetApp.GoogleSheets = (function () {
     getData: getData,
     refresh: refresh,
     isConfigured: isConfigured,
+    getApiUrl: getApiUrl,
   };
 })();

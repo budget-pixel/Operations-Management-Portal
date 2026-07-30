@@ -6,11 +6,11 @@
 
    Depends on (must load first): Calculations, Storage,
    GoogleSheets, Departments, Expenses, Revenue, AccountSearch,
-   Validation, AmendmentRules, Print — see index.html for load
-   order.
+   Validation, AmendmentRules, Print, Submission — see index.html
+   for load order.
    ============================================================= */
 
-(function (Calculations, Storage, GoogleSheets, Departments, Expenses, Revenue, AccountSearch, Validation, AmendmentRules, Print) {
+(function (Calculations, Storage, GoogleSheets, Departments, Expenses, Revenue, AccountSearch, Validation, AmendmentRules, Print, Submission) {
   'use strict';
 
   var INITIAL_ROW_COUNT = 5;
@@ -49,9 +49,15 @@
   var discardDraftBtn = document.getElementById('discardDraftBtn');
   var statusBanner = document.getElementById('statusBanner');
 
+  var submitBtn = document.getElementById('submitBtn');
   var saveDraftBtn = document.getElementById('saveDraftBtn');
   var printBtn = document.getElementById('printBtn');
   var clearBtn = document.getElementById('clearBtn');
+
+  var requestorEmailInput = document.getElementById('requestorEmail');
+  var requestorEmailErrorEl = document.getElementById('requestorEmail-error');
+  var totalsBalanceErrorEl = document.getElementById('totalsBalance-error');
+  var submitBtnDefaultLabel = submitBtn.textContent;
 
   var printEls = {
     date: document.getElementById('printDate'),
@@ -453,12 +459,18 @@
     updateTotal(section);
   }
 
-  function updateTotal(section) {
+  // Raw numeric total for a section — shared by updateTotal() (display)
+  // and validateForm()'s balanced-totals check (comparison).
+  function getSectionTotal(section) {
     var amounts = Array.prototype.map.call(
       tableBodies[section].querySelectorAll('.amount-input'),
       function (input) { return input.value; }
     );
-    totalEls[section].textContent = Calculations.formatCurrency(Calculations.sumAmounts(amounts));
+    return Calculations.sumAmounts(amounts);
+  }
+
+  function updateTotal(section) {
+    totalEls[section].textContent = Calculations.formatCurrency(getSectionTotal(section));
   }
 
   function getRows(section) {
@@ -473,6 +485,10 @@
     field.input.addEventListener('input', function () {
       Validation.setFieldError(field.input, field.error, '');
     });
+  });
+
+  requestorEmailInput.addEventListener('input', function () {
+    Validation.setFieldError(requestorEmailInput, requestorEmailErrorEl, '');
   });
 
   amendmentRadios.forEach(function (radio) {
@@ -500,6 +516,17 @@
         firstInvalidEl = firstInvalidEl || field.input;
       }
     });
+
+    var emailOk = Validation.validateEmailField(
+      requestorEmailInput,
+      requestorEmailErrorEl,
+      'Requestor Email Address is required.',
+      'Enter a valid email address.'
+    );
+    if (!emailOk) {
+      isValid = false;
+      firstInvalidEl = firstInvalidEl || requestorEmailInput;
+    }
 
     var amendmentOk = Validation.validateAmendmentType(amendmentRadios, amendmentErrorEl);
     if (!amendmentOk) {
@@ -543,6 +570,17 @@
       }
     });
 
+    // A budget transfer must move the same amount out as it moves in.
+    var balancedOk = Validation.validateBalancedTotals(
+      getSectionTotal('transferFrom'),
+      getSectionTotal('transferTo'),
+      totalsBalanceErrorEl,
+      'Transfer From and Transfer To totals must match before submitting.'
+    );
+    if (!balancedOk) {
+      isValid = false;
+    }
+
     return { isValid: isValid, firstInvalidEl: firstInvalidEl };
   }
 
@@ -566,6 +604,7 @@
       description: document.getElementById('description').value,
       preparedBy: document.getElementById('preparedBy').value,
       title: document.getElementById('title').value,
+      requestorEmail: requestorEmailInput.value.trim(),
       amendmentType: checkedRadio ? checkedRadio.value : '',
       department: departmentSelections.single,
       departmentFrom: departmentSelections.from,
@@ -592,6 +631,7 @@
     document.getElementById('description').value = data.description || '';
     document.getElementById('preparedBy').value = data.preparedBy || '';
     document.getElementById('title').value = data.title || '';
+    requestorEmailInput.value = data.requestorEmail || '';
 
     amendmentRadios.forEach(function (radio) {
       radio.checked = radio.value === data.amendmentType;
@@ -651,6 +691,57 @@
 
   function hideStatus() {
     statusBanner.hidden = true;
+  }
+
+  // Disables/relabels the Submit button while a request is in flight. Per
+  // spec, it's only re-enabled if the submission fails — a successful
+  // submission leaves it disabled (Clear Form starts a fresh request)
+  // rather than inviting an accidental double-submit of the same request.
+  function setSubmitting(isSubmitting) {
+    submitBtn.disabled = isSubmitting;
+    submitBtn.textContent = isSubmitting ? 'Submitting…' : submitBtnDefaultLabel;
+  }
+
+  // Rich confirmation shown once the server accepts a submission: Request
+  // ID, who was emailed, and a link to the saved PDF — matches the
+  // confirmation copy from the feature spec.
+  function showSubmissionSuccess(requestId, pdfUrl, requestorEmail) {
+    statusBanner.className = 'banner no-print banner-success';
+    statusBanner.innerHTML = '';
+
+    var textWrap = document.createElement('div');
+
+    var heading = document.createElement('strong');
+    heading.textContent = 'Budget Transfer Request Submitted Successfully';
+    textWrap.appendChild(heading);
+
+    [
+      'Request ID: ' + requestId,
+      'A confirmation email has been sent to ' + requestorEmail + '.',
+      'County Budget staff have also been notified.',
+      'Your completed Budget Transfer Request has been saved and emailed as a PDF.',
+    ].forEach(function (line) {
+      var lineEl = document.createElement('div');
+      lineEl.textContent = line;
+      textWrap.appendChild(lineEl);
+    });
+
+    statusBanner.appendChild(textWrap);
+
+    if (pdfUrl) {
+      var actions = document.createElement('span');
+      actions.className = 'banner-actions';
+      var link = document.createElement('a');
+      link.href = pdfUrl;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'View PDF';
+      link.className = 'btn btn-secondary';
+      actions.appendChild(link);
+      statusBanner.appendChild(actions);
+    }
+
+    statusBanner.hidden = false;
   }
 
   function showCoaBanner(variant, text) {
@@ -840,15 +931,31 @@
     event.preventDefault();
     var result = validateForm();
 
-    if (result.isValid) {
-      showStatus('banner-success', 'Request validated and ready for submission. Use Print to generate a copy for signatures.');
-    } else {
+    if (!result.isValid) {
       showStatus('banner-error', 'Please correct the highlighted fields before submitting.');
       if (result.firstInvalidEl) {
         result.firstInvalidEl.focus();
         result.firstInvalidEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+      return;
     }
+
+    var requestData = collectFormData();
+
+    setSubmitting(true);
+    showStatus('banner-info', 'Submitting your request…');
+
+    Submission.submit(requestData)
+      .then(function (result) {
+        showSubmissionSuccess(result.requestId, result.pdfUrl, requestData.requestorEmail);
+        // The request is now officially submitted — an old "restore
+        // draft?" prompt on a future visit would just be stale.
+        Storage.clearDraft();
+      })
+      .catch(function (err) {
+        showStatus('banner-error', err && err.message ? err.message : 'Something went wrong submitting the request. Please try again.');
+        setSubmitting(false);
+      });
   });
 
   saveDraftBtn.addEventListener('click', function () {
@@ -867,10 +974,13 @@
 
     form.reset();
     requiredFields.forEach(function (field) { Validation.setFieldError(field.input, field.error, ''); });
+    Validation.setFieldError(requestorEmailInput, requestorEmailErrorEl, '');
+    totalsBalanceErrorEl.textContent = '';
     amendmentErrorEl.textContent = '';
     amendmentRadios.forEach(function (r) { r.closest('.radio-option').classList.remove('is-checked'); });
     resetDepartmentSection();
     SECTIONS.forEach(function (section) { resetTable(section, INITIAL_ROW_COUNT); });
+    setSubmitting(false);
     hideStatus();
   });
 
@@ -920,5 +1030,6 @@
   window.BudgetApp.AccountSearch,
   window.BudgetApp.Validation,
   window.BudgetApp.AmendmentRules,
-  window.BudgetApp.Print
+  window.BudgetApp.Print,
+  window.BudgetApp.Submission
 );

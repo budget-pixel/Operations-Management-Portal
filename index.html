@@ -71,6 +71,12 @@
               <p class="error-text" id="title-error"></p>
             </div>
           </div>
+
+          <div class="field">
+            <label for="requestorEmail">Requestor Email Address <span class="required">*</span></label>
+            <input type="email" id="requestorEmail" name="requestorEmail" placeholder="you@waltoncountyfl.gov" required />
+            <p class="error-text" id="requestorEmail-error"></p>
+          </div>
         </div>
       </section>
 
@@ -197,9 +203,11 @@
 
       </section>
 
+      <p class="error-text" id="totalsBalance-error"></p>
+
       <!-- Actions -->
       <div class="actions no-print">
-        <button type="submit" class="btn btn-primary">Submit Request</button>
+        <button type="submit" id="submitBtn" class="btn btn-primary">Submit Budget Transfer Request</button>
         <button type="button" id="saveDraftBtn" class="btn btn-secondary">Save Draft</button>
         <button type="button" id="printBtn" class="btn btn-secondary">Print Form</button>
         <button type="button" id="clearBtn" class="btn btn-danger">Clear Form</button>
@@ -324,6 +332,7 @@
   <script src="js/validation.js"></script>
   <script src="js/amendmentRules.js"></script>
   <script src="js/print.js"></script>
+  <script src="js/submission.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

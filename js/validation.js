@@ -38,6 +38,36 @@ window.BudgetApp.Validation = (function (Calculations) {
     return checked;
   }
 
+  // Deliberately simple (not RFC 5322) — good enough to catch typos
+  // without rejecting real addresses a stricter pattern might choke on.
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+  }
+
+  // Required + format check for the Requestor Email field.
+  function validateEmailField(input, errorEl, requiredMessage, formatMessage) {
+    var value = input.value.trim();
+    if (!value) {
+      setFieldError(input, errorEl, requiredMessage);
+      return false;
+    }
+    if (!isValidEmail(value)) {
+      setFieldError(input, errorEl, formatMessage);
+      return false;
+    }
+    setFieldError(input, errorEl, '');
+    return true;
+  }
+
+  // A budget transfer should move the same dollar amount out as it moves
+  // in — compares formatted (2-decimal) strings rather than raw floats to
+  // avoid spurious mismatches from binary floating-point rounding.
+  function validateBalancedTotals(fromTotal, toTotal, errorEl, message) {
+    var balanced = fromTotal.toFixed(2) === toTotal.toFixed(2);
+    errorEl.textContent = balanced ? '' : message;
+    return balanced;
+  }
+
   // A department combobox holds a { code, name } selection (set via
   // AccountSearch's setSelection/onSelect), not raw text.
   function validateDepartmentSelection(selection, errorEl, message) {
@@ -126,5 +156,8 @@ window.BudgetApp.Validation = (function (Calculations) {
     validateAmendmentType: validateAmendmentType,
     validateDepartmentSelection: validateDepartmentSelection,
     validateTransferRows: validateTransferRows,
+    isValidEmail: isValidEmail,
+    validateEmailField: validateEmailField,
+    validateBalancedTotals: validateBalancedTotals,
   };
 })(window.BudgetApp.Calculations);
