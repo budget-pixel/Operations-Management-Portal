@@ -1,14 +1,17 @@
 # Chart of Accounts — Google Sheets Integration
 
-The Department and Account dropdowns are driven live by a Google Sheets
-workbook, read through a small Google Apps Script "Web App" that you deploy
+The Budget Management Portal has two workflows — Budget Transfer /
+Amendment Request (`transfer.html`) and Fiscal Year Rollforward Request
+(`rollforward.html`) — and both share this same setup. Their Department
+and Account dropdowns are driven live by a Google Sheets workbook, read
+through a single small Google Apps Script "Web App" that you deploy
 yourself. This keeps your spreadsheet completely private — no API key is
-ever embedded in the website's code, and nothing needs to be shared publicly.
-The same Apps Script also *receives* submitted requests (§6 below): it
-generates a PDF, records the request in two more tabs in this same
-workbook, and emails the PDF to Budget Office staff. The PDF is never
-saved anywhere (no Google Drive) — it only exists long enough to attach to
-that email.
+ever embedded in the website's code, and nothing needs to be shared
+publicly. The same Apps Script also *receives* submitted requests from
+both workflows (§6 and §7 below): it generates a PDF, records the request
+in its own sheet(s), and emails the PDF to Budget Office staff. PDFs are
+never saved anywhere (no Google Drive) — each exists only long enough to
+attach to that email.
 
 ## 1. Prepare the spreadsheet
 
@@ -86,8 +89,9 @@ Open `js/googleSheets.js` and paste your Web App URL into the
 var SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycb.../exec';
 ```
 
-Save the file and reload `index.html`. The Department and Account dropdowns
-will now populate from your live spreadsheet.
+Save the file and reload `transfer.html` (or `rollforward.html`). The
+Department and Account dropdowns on both pages will now populate from your
+live spreadsheet — they share the exact same `SHEETS_API_URL`.
 
 ## 5. After editing the spreadsheet later
 
@@ -97,15 +101,15 @@ sheet, use the **Refresh Chart of Accounts** link on the form (or simply
 close and reopen the tab) to pick up the changes — you do **not** need to
 redeploy the Apps Script for data edits, only if you change `Code.gs` itself.
 
-## 6. Set up request submission (Sheets storage + email)
+## 6. Set up Budget Transfer submission (Sheets storage + email)
 
-Clicking **Submit Budget Transfer Request** on the site sends the completed
-form to the same Apps Script, which generates a PDF, records the request
-across two more tabs in this workbook, and emails the PDF to Budget Office
-staff. The PDF itself is never saved anywhere — it's built fresh for each
-submission, attached to that email, and discarded. This needs three more
-tabs, none of which existed for the read-only Chart of Accounts setup
-above.
+Clicking **Submit Budget Transfer Request** on `transfer.html` sends the
+completed form to the same Apps Script, which generates a PDF, records the
+request across two more tabs in this workbook, and emails the PDF to
+Budget Office staff. The PDF itself is never saved anywhere — it's built
+fresh for each submission, attached to that email, and discarded. This
+needs three more tabs, none of which existed for the read-only Chart of
+Accounts setup above.
 
 **Settings** — `Setting | Value` columns. One row per setting:
 
@@ -116,12 +120,14 @@ above.
 | RequestPrefix | BTR |
 
 - `NotificationEmails` — semicolon-separated list; every address gets the
-  Budget Office notification email for every submitted request. Edit this
-  list any time staffing changes — no redeploy needed, since it's read
-  fresh on every submission.
-- `FiscalYear` — used to build Request IDs (`{FiscalYear}-000001`, e.g.
-  `2026-000001`). Update it whenever your fiscal year rolls over; the
-  sequence number for a new year starts back at `000001`.
+  Budget Office notification email for every submitted request, from
+  **both** workflows. Edit this list any time staffing changes — no
+  redeploy needed, since it's read fresh on every submission.
+- `FiscalYear` — used to build Request IDs for **both** workflows:
+  Budget Transfer's `{FiscalYear}-000001` (e.g. `2026-000001`) and
+  Rollforward's `RF-{FiscalYear}-0001` (e.g. `RF-2026-0001`) — see §7.
+  Update it whenever your fiscal year rolls over; each sequence starts
+  back at its first number for the new year.
 - `RequestPrefix` — stored for possible future use; the current Request ID
   format doesn't include it.
 
@@ -139,6 +145,27 @@ submitted request produces multiple rows here). Header row, in order:
 `Resolution Number` and `Supporting Notes` are intentionally left blank by
 the script — the form doesn't collect them yet; they're there for a future
 workflow to fill in without changing the sheet's structure.
+
+## 7. Set up Fiscal Year Rollforward submission
+
+Clicking **Submit Rollforward Request** on `rollforward.html` sends the
+completed form to the exact same Apps Script deployment — no separate URL,
+no separate deployment. The script tells the two request types apart by a
+`requestType` field the client sends automatically; you don't need to
+configure anything for this. It generates a PDF, records one row in a new
+sheet, and emails the PDF to Budget Office staff (the requester is **not**
+emailed, matching Budget Transfer's current behavior). Reuses the same
+`Settings` sheet from §6 — no new settings needed.
+
+**Rollforward Requests** — one row per submitted request. Create the sheet
+with this exact header row, in order:
+
+`Timestamp | Request ID | Requester Name | Requester Email | Department Code | Department Name | Expense Account | Project Number | Amount | Fiscal Year | Justification | Status | Submitted By`
+
+Note the column order here is different from Budget Transfer Requests
+(`Timestamp` comes before `Request ID`) — this matches how the sheet was
+specified, and `Code.gs`'s `generateRequestId()` already knows to look in
+the right column for each sheet.
 
 ## Troubleshooting
 
@@ -159,9 +186,10 @@ workflow to fill in without changing the sheet's structure.
   comparing, so this should already be handled — if it's still happening,
   double-check the department code actually appears (in any zero-padded
   form) on the corresponding Expense/Revenue rows at all.
-- **Submission fails with a "Sheet not found" error** — one of the §6 tabs
-  (`Settings`, `Budget Transfer Requests`, `Budget Transfer Lines`) is
-  missing or misnamed. The error message names which one.
+- **Submission fails with a "Sheet not found" error** — one of the §6/§7
+  tabs (`Settings`, `Budget Transfer Requests`, `Budget Transfer Lines`,
+  `Rollforward Requests`) is missing or misnamed. The error message names
+  which one.
 - **Submission fails with "You do not have permission to call
   MailApp..."** — the account that deployed the script hasn't granted
   Gmail access yet, and deploying a "new version" doesn't reliably

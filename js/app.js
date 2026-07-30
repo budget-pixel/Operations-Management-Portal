@@ -773,6 +773,17 @@
     coaStatusBanner.appendChild(refreshBtn);
   }
 
+  // Logs the raw Chart of Accounts payload to the browser console (DevTools
+  // -> Console) so it can be inspected in full — the on-screen banner only
+  // ever shows summary counts.
+  function logCoaResults(label, results) {
+    console.log(label, {
+      departments: results[0],
+      expenses: results[1],
+      revenue: results[2],
+    });
+  }
+
   function handleRefreshCoa() {
     showCoaLoading();
     GoogleSheets.refresh()
@@ -780,6 +791,7 @@
         return Promise.all([Departments.load(), Expenses.load(), Revenue.load()]);
       })
       .then(function (results) {
+        logCoaResults('Chart of Accounts refreshed:', results);
         // Existing selections are left as-is; only subsequent searches
         // (which read live from Departments/Expenses/Revenue) see the
         // refreshed data.
@@ -794,6 +806,7 @@
     showCoaLoading();
     return Promise.all([Departments.load(), Expenses.load(), Revenue.load()])
       .then(function (results) {
+        logCoaResults('Chart of Accounts loaded:', results);
         showCoaLoaded(results[0].length, results[1].length, results[2].length);
       })
       .catch(function (err) {

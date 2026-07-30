@@ -1,15 +1,20 @@
 /**
- * Budget Amendment Request — Chart of Accounts JSON proxy + submission
+ * Budget Management Portal — Chart of Accounts JSON proxy + submission
  * backend.
  *
  * Paste this entire file into the Apps Script editor of a script bound to
  * your Chart of Accounts spreadsheet (Extensions -> Apps Script). It reads
- * the COA tabs for the website's dropdowns (doGet) and, separately,
- * receives completed Budget Transfer Requests (doPost): generates a PDF,
- * records the request in two normalized worksheets, and emails the PDF to
- * Budget Office staff. The PDF is never saved anywhere (no Google Drive) —
- * it exists only in memory for as long as it takes to attach it to that
- * outgoing email.
+ * the COA tabs for the website's dropdowns (doGet) and, separately, receives
+ * completed submissions from BOTH portal workflows through the same
+ * deployment (doPost): the Budget Transfer / Amendment Request and the
+ * Fiscal Year Rollforward Request. doPost branches on the payload's
+ * `requestType` field ('rollforward', or anything else treated as a
+ * Transfer submission for backward compatibility) — see
+ * handleTransferSubmission()/handleRollforwardSubmission() below. Each
+ * generates its own PDF, records its own request in its own worksheet(s),
+ * and emails the PDF to Budget Office staff. PDFs are never saved anywhere
+ * (no Google Drive) — each exists only in memory for as long as it takes to
+ * attach it to that outgoing email.
  *
  * Expected tabs and exact header row text:
  *
@@ -17,8 +22,9 @@
  *   "COA Expenses"             Department Code | Expense Object | Expense Object Name | Project
  *   "COA Revenue"              Org Code | Object Code | Name  (Project, if present, is ignored)
  *   "Settings"                 Setting | Value  (see getSettings() below)
- *   "Budget Transfer Requests" one row per submitted request (see appendRequestRow())
+ *   "Budget Transfer Requests" one row per submitted Transfer request (see appendRequestRow())
  *   "Budget Transfer Lines"    one row per Transfer From/To line (see appendLineRows())
+ *   "Rollforward Requests"     one row per submitted Rollforward request (see appendRollforwardRow())
  *
  * COA Expenses and COA Revenue don't carry a department *name* column, only
  * a code (Department Code / Org Code) — departmentName comes back blank for
@@ -28,10 +34,12 @@
  * their Project column — that comes back as projectCode so the client can
  * search by it and auto-fill it once that account is selected.
  *
- * Notification recipients, the fiscal year, and the (currently unused)
- * Request ID prefix are NOT hardcoded here — they're read from the
- * "Settings" sheet on every submission, so staff can update them without
- * touching this file. See getSettings().
+ * Notification recipients and the fiscal year are NOT hardcoded here —
+ * they're read from the "Settings" sheet on every submission, so staff can
+ * update them without touching this file. See getSettings(). Both Transfer
+ * IDs ("2026-000001") and Rollforward IDs ("RF-2026-0001") number off the
+ * same Settings!FiscalYear value but count rows in their own separate
+ * sheets, so the two sequences never collide — see generateRequestId().
  *
  * Deploying doPost for the first time adds a new required scope (Gmail,
  * to send the notification email) beyond doGet's read-only Sheets access.
@@ -201,10 +209,12 @@ var DEPARTMENT_MODE_BY_TYPE = {
 };
 
 /**
- * Handles a submitted Budget Transfer Request from the website.
+ * Handles a submitted request from either portal workflow.
  *
- * Input: e.postData.contents — a JSON string matching the client's
- * collectFormData() output (see js/app.js), plus requestorEmail. The
+ * Input: e.postData.contents — a JSON string. For a Transfer submission,
+ * matches the client's collectFormData() output (see js/app.js) plus
+ * requestorEmail; for a Rollforward submission, matches js/rollforward.js's
+ * collectFormData() output and carries requestType: 'rollforward'. The
  * client sends this with no explicit Content-Type header on purpose: Apps
  * Script Web Apps can't handle a CORS preflight (OPTIONS) request, and a
  * plain-string fetch() body defaults to "text/plain", which browsers
@@ -219,48 +229,93 @@ var DEPARTMENT_MODE_BY_TYPE = {
 function doPost(e) {
   try {
     var requestData = JSON.parse(e.postData.contents);
-
-    var validationErrors = validateSubmission(requestData);
-    if (validationErrors.length > 0) {
-      return jsonResponse({ success: false, error: validationErrors.join(' ') });
-    }
-
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var settings = getSettings(ss);
-    var requestId = generateRequestId(ss, settings.FiscalYear);
-    var timestamp = new Date();
 
-    var lines = buildTransferLines(requestData);
-    var totalAmount = sumLineAmounts(lines, 'Transfer From');
-
-    // One PDF blob, built once, reused for both emails below — never
-    // written to Drive or anywhere else, so it only exists for the
-    // lifetime of this request.
-    var pdfBlob = buildRequestPdf(requestData, requestId, timestamp, lines, totalAmount);
-
-    // Written as a pair, with a rollback if the second write fails, so a
-    // request row is never left in the sheet with no matching lines (an
-    // incomplete/orphaned record) — see writeRequestAndLines().
-    writeRequestAndLines(ss, {
-      requestId: requestId,
-      timestamp: timestamp,
-      requestData: requestData,
-      totalAmount: totalAmount,
-      lines: lines,
-    });
-
-    sendCountyNotification(settings, requestData, requestId, timestamp, totalAmount, pdfBlob);
-
-    return jsonResponse({
-      success: true,
-      requestId: requestId,
-    });
+    if (requestData && requestData.requestType === 'rollforward') {
+      return jsonResponse(handleRollforwardSubmission(ss, requestData));
+    }
+    return jsonResponse(handleTransferSubmission(ss, requestData));
   } catch (err) {
     // Full stack goes to the Apps Script execution log (Executions tab)
     // for troubleshooting; the client only sees a plain message.
     console.error('doPost failed: ' + (err && err.stack ? err.stack : err));
     return jsonResponse({ success: false, error: String(err && err.message ? err.message : err) });
   }
+}
+
+/**
+ * Handles a Budget Transfer / Amendment Request submission. Behavior is
+ * unchanged from before doPost supported multiple request types — only
+ * moved into its own function so doPost can dispatch to it.
+ *
+ * Input: the spreadsheet, and the parsed request payload.
+ * Output: { success: true, requestId } or { success: false, error }.
+ */
+function handleTransferSubmission(ss, requestData) {
+  var validationErrors = validateSubmission(requestData);
+  if (validationErrors.length > 0) {
+    return { success: false, error: validationErrors.join(' ') };
+  }
+
+  var settings = getSettings(ss);
+  var requestId = generateRequestId(ss, 'Budget Transfer Requests', settings.FiscalYear + '-', 6, 0);
+  var timestamp = new Date();
+
+  var lines = buildTransferLines(requestData);
+  var totalAmount = sumLineAmounts(lines, 'Transfer From');
+
+  // One PDF blob, built once, reused for both emails below — never
+  // written to Drive or anywhere else, so it only exists for the
+  // lifetime of this request.
+  var pdfBlob = buildRequestPdf(requestData, requestId, timestamp, lines, totalAmount);
+
+  // Written as a pair, with a rollback if the second write fails, so a
+  // request row is never left in the sheet with no matching lines (an
+  // incomplete/orphaned record) — see writeRequestAndLines().
+  writeRequestAndLines(ss, {
+    requestId: requestId,
+    timestamp: timestamp,
+    requestData: requestData,
+    totalAmount: totalAmount,
+    lines: lines,
+  });
+
+  sendCountyNotification(settings, requestData, requestId, timestamp, totalAmount, pdfBlob);
+
+  return { success: true, requestId: requestId };
+}
+
+/**
+ * Handles a Fiscal Year Rollforward Request submission — the second portal
+ * workflow, added alongside Transfer without touching any of its code.
+ * Only one row is written (no paired lines table like Transfer has), so
+ * there's no orphaned-record risk requiring a rollback.
+ *
+ * Input: the spreadsheet, and the parsed request payload (see
+ * js/rollforward.js's collectFormData()).
+ * Output: { success: true, requestId } or { success: false, error }.
+ */
+function handleRollforwardSubmission(ss, requestData) {
+  var validationErrors = validateRollforwardSubmission(requestData);
+  if (validationErrors.length > 0) {
+    return { success: false, error: validationErrors.join(' ') };
+  }
+
+  var settings = getSettings(ss);
+  var requestId = generateRequestId(ss, 'Rollforward Requests', 'RF-' + settings.FiscalYear + '-', 4, 1);
+  var timestamp = new Date();
+
+  var pdfBlob = buildRollforwardPdf(requestData, requestId, timestamp);
+
+  appendRollforwardRow(ss, {
+    requestId: requestId,
+    timestamp: timestamp,
+    requestData: requestData,
+  });
+
+  sendRollforwardNotification(settings, requestData, requestId, timestamp, pdfBlob);
+
+  return { success: true, requestId: requestId };
 }
 
 // ---------- Settings ----------
@@ -302,34 +357,42 @@ function getSettings(ss) {
 // ---------- Request ID ----------
 
 /**
- * Generates the next sequential Request ID for a fiscal year, e.g.
- * "2026-000001". Guarded by a script lock so two submissions arriving at
- * nearly the same moment can't both compute the same next number.
+ * Generates the next sequential Request ID with a given prefix, counted
+ * against a given sheet's Request ID column, e.g. ('Budget Transfer
+ * Requests', '2026-', 6, 0) -> "2026-000042", or ('Rollforward Requests',
+ * 'RF-2026-', 4, 1) -> "RF-2026-0042". Guarded by a script lock so two
+ * submissions arriving at nearly the same moment can't both compute the
+ * same next number. Transfer and Rollforward call this with different
+ * sheet names, so their two numbering sequences can never collide with
+ * each other.
  *
- * Input: the spreadsheet and the fiscal year string from Settings.
- * Output: a string like "2026-000042".
+ * Input: the spreadsheet, the full ID prefix (already including the
+ * fiscal year and any trailing "-"), how many digits to zero-pad the
+ * sequence number to, and the 0-based column index the Request ID lives
+ * in on that sheet (Transfer's sheet has it first; Rollforward's has
+ * Timestamp first, per the user's specified column order).
+ * Output: a string like "2026-000042" or "RF-2026-0042".
  */
-function generateRequestId(ss, fiscalYear) {
+function generateRequestId(ss, sheetName, idPrefix, padWidth, idColumnIndex) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    var sheet = ss.getSheetByName('Budget Transfer Requests');
+    var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-      throw new Error('Sheet not found: "Budget Transfer Requests".');
+      throw new Error('Sheet not found: "' + sheetName + '".');
     }
 
-    var idPrefix = fiscalYear + '-';
     var values = sheet.getDataRange().getValues();
     var count = 0;
     for (var i = 1; i < values.length; i += 1) {
-      var existingId = String(values[i][0] || '');
+      var existingId = String(values[i][idColumnIndex] || '');
       if (existingId.indexOf(idPrefix) === 0) {
         count += 1;
       }
     }
 
     var nextNumber = count + 1;
-    var padded = ('000000' + nextNumber).slice(-6);
+    var padded = String(nextNumber).padStart(padWidth, '0');
     return idPrefix + padded;
   } finally {
     lock.releaseLock();
@@ -391,6 +454,37 @@ function sumAmounts(lines) {
 
 function isValidEmailFormat(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+}
+
+/**
+ * Re-validates a Rollforward submission server-side — mirrors
+ * validateSubmission()'s style/purpose for the Transfer workflow.
+ *
+ * Input: the parsed request payload.
+ * Output: an array of human-readable error strings (empty = valid).
+ */
+function validateRollforwardSubmission(data) {
+  var errors = [];
+
+  if (!data || typeof data !== 'object') {
+    return ['Malformed request payload.'];
+  }
+  if (!data.requesterName) errors.push('Requester Name is required.');
+  if (!data.requesterEmail || !isValidEmailFormat(data.requesterEmail)) {
+    errors.push('A valid Requester Email is required.');
+  }
+  if (!data.department || !data.department.code) errors.push('Department is required.');
+  if (!data.account || !data.account.code) errors.push('Expense Account is required.');
+
+  var amount = parseFloat(data.amount);
+  if (!isFinite(amount) || amount <= 0) {
+    errors.push('A valid Amount greater than 0 is required.');
+  }
+  if (!data.fiscalYear) errors.push('Fiscal Year is required.');
+  if (!data.justification) errors.push('Detailed Justification is required.');
+  if (data.certified !== true) errors.push('Certification is required.');
+
+  return errors;
 }
 
 // ---------- Transfer lines (shared by the Sheets writer and the PDF) ----------
@@ -576,6 +670,47 @@ function appendLineRows(ss, requestId, lines) {
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
+/**
+ * Appends one row to "Rollforward Requests" — a single row per submission
+ * (unlike Transfer, there's no separate lines sheet, so no pairing/
+ * rollback logic is needed here).
+ * Columns, in order: Timestamp, Request ID, Requester Name, Requester
+ * Email, Department Code, Department Name, Expense Account, Project
+ * Number, Amount, Fiscal Year, Justification, Status, Submitted By.
+ *
+ * "Submitted By" is populated with the same Requester Name — this form
+ * has no separate submitter identity from the requester.
+ */
+function appendRollforwardRow(ss, params) {
+  var sheet = ss.getSheetByName('Rollforward Requests');
+  if (!sheet) {
+    throw new Error('Sheet not found: "Rollforward Requests".');
+  }
+
+  var data = params.requestData;
+  var department = data.department || {};
+  var account = data.account || {};
+  // Reuses the same composite-number builder Transfer's lines use, so an
+  // Expense Account reads identically everywhere in the app.
+  var accountNumber = buildAccountNumber(department.code, account, data.projectCode);
+
+  sheet.appendRow([
+    params.timestamp,
+    params.requestId,
+    data.requesterName || '',
+    data.requesterEmail || '',
+    department.code || '',
+    department.name || '',
+    accountNumber + (account.name ? ' - ' + account.name : ''),
+    data.projectCode || '',
+    parseFloat(data.amount) || 0,
+    data.fiscalYear || '',
+    data.justification || '',
+    'Submitted',
+    data.requesterName || '',
+  ]);
+}
+
 // ---------- PDF ----------
 
 /**
@@ -616,27 +751,7 @@ function buildRequestHtml(data, requestId, timestamp, lines, totalAmount) {
       + '&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;'
       + '<b>Transfer To Dept:</b> ' + escapeHtml(formatDepartmentForDisplay(data.departmentTo));
 
-  var css = ''
-    + 'body{font-family:Arial,Helvetica,sans-serif;color:#172033;font-size:11px;margin:24px;}'
-    + 'h1{font-family:Georgia,"Times New Roman",serif;font-weight:500;font-size:20px;color:#003f28;margin:0 0 10px;}'
-    + '.meta{margin:2px 0;font-size:11px;}'
-    + '.meta b{color:#003f28;}'
-    + '.tables{margin-top:16px;}'
-    + '.table-col{display:inline-block;width:48%;vertical-align:top;}'
-    + '.table-col + .table-col{margin-left:3%;}'
-    + 'h2{font-size:13px;margin:0 0 4px;color:#003f28;}'
-    // table-layout:fixed + the matching <colgroup> in buildLinesTableHtml
-    // (33/42/25) keep both tables' column widths identical regardless of
-    // content length — without this, a wrapping Description/Account
-    // Number cell in one table (like a project-code account number) makes
-    // its columns auto-size wider than the other table's, so the two
-    // tables visibly don't line up. Mirrors the client print view's
-    // .print-table CSS (css/styles.css), which uses the same fix.
-    + 'table{border-collapse:collapse;width:100%;table-layout:fixed;}'
-    + 'th,td{border:1px solid #999999;padding:4px 6px;text-align:left;font-size:10px;word-wrap:break-word;}'
-    + 'th{background:#f6f8f5;}'
-    + 'td:last-child,th:last-child{text-align:right;white-space:nowrap;}'
-    + '.total{text-align:right;font-weight:bold;margin-top:4px;font-size:10px;}';
+  var css = buildPdfCss();
 
   return '<html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>'
     + '<h1>Budget Amendment Request</h1>'
@@ -668,6 +783,74 @@ function buildLinesTableHtml(lines) {
     + '<tbody>' + rowsHtml + '</tbody></table>';
 }
 
+// Shared inline CSS for every generated PDF (Transfer's and Rollforward's)
+// so both documents stay visually consistent without copy-pasted CSS.
+function buildPdfCss() {
+  return ''
+    + 'body{font-family:Arial,Helvetica,sans-serif;color:#172033;font-size:11px;margin:24px;}'
+    + 'h1{font-family:Georgia,"Times New Roman",serif;font-weight:500;font-size:20px;color:#003f28;margin:0 0 10px;}'
+    + '.meta{margin:2px 0;font-size:11px;}'
+    + '.meta b{color:#003f28;}'
+    + '.tables{margin-top:16px;}'
+    + '.table-col{display:inline-block;width:48%;vertical-align:top;}'
+    + '.table-col + .table-col{margin-left:3%;}'
+    + 'h2{font-size:13px;margin:0 0 4px;color:#003f28;}'
+    // table-layout:fixed + the matching <colgroup> in buildLinesTableHtml
+    // (33/42/25) keep both tables' column widths identical regardless of
+    // content length — without this, a wrapping Description/Account
+    // Number cell in one table (like a project-code account number) makes
+    // its columns auto-size wider than the other table's, so the two
+    // tables visibly don't line up. Mirrors the client print view's
+    // .print-table CSS (css/styles.css), which uses the same fix.
+    + 'table{border-collapse:collapse;width:100%;table-layout:fixed;}'
+    + 'th,td{border:1px solid #999999;padding:4px 6px;text-align:left;font-size:10px;word-wrap:break-word;}'
+    + 'th{background:#f6f8f5;}'
+    + 'td:last-child,th:last-child{text-align:right;white-space:nowrap;}'
+    + '.total{text-align:right;font-weight:bold;margin-top:4px;font-size:10px;}'
+    + '.justification{margin-top:12px;white-space:pre-wrap;}';
+}
+
+/**
+ * Builds the Rollforward Request PDF blob, attached to the county
+ * notification email. Mirrors buildRequestPdf()'s shape — a single blob,
+ * never written to Drive, that exists only for the lifetime of this
+ * request.
+ */
+function buildRollforwardPdf(data, requestId, timestamp) {
+  var html = buildRollforwardHtml(data, requestId, timestamp);
+  var htmlBlob = Utilities.newBlob(html, 'text/html', 'rollforward.html');
+  var pdfBlob = htmlBlob.getAs('application/pdf');
+  pdfBlob.setName('Rollforward-Request-' + requestId + '.pdf');
+  return pdfBlob;
+}
+
+// A single-column summary block plus a Justification paragraph — simpler
+// than Transfer's dual Transfer From/To tables since a rollforward moves
+// one amount from one account into next year's budget.
+function buildRollforwardHtml(data, requestId, timestamp) {
+  var department = data.department || {};
+  var account = data.account || {};
+  var accountNumber = buildAccountNumber(department.code, account, data.projectCode);
+  var amount = parseFloat(data.amount) || 0;
+  var css = buildPdfCss();
+
+  return '<html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>'
+    + '<h1>Fiscal Year Rollforward Request</h1>'
+    + '<div class="meta"><b>Request ID:</b> ' + escapeHtml(requestId) + '</div>'
+    + '<div class="meta"><b>Date:</b> ' + escapeHtml(formatTimestampForEmail(timestamp)) + '</div>'
+    + '<div class="meta"><b>Requester Name:</b> ' + escapeHtml(data.requesterName || '')
+      + '&nbsp;&nbsp;&nbsp;<b>Requester Email:</b> ' + escapeHtml(data.requesterEmail || '') + '</div>'
+    + '<div class="meta"><b>Department:</b> ' + escapeHtml(formatDepartmentForDisplay(department)) + '</div>'
+    + '<div class="meta"><b>Expense Account:</b> ' + escapeHtml(accountNumber)
+      + (account.name ? ' - ' + escapeHtml(account.name) : '') + '</div>'
+    + (data.projectCode ? '<div class="meta"><b>Project Number:</b> ' + escapeHtml(data.projectCode) + '</div>' : '')
+    + '<div class="meta"><b>Fiscal Year:</b> ' + escapeHtml(data.fiscalYear || '') + '</div>'
+    + '<div class="meta"><b>Amount Requested to Roll Forward:</b> ' + formatCurrency(amount) + '</div>'
+    + '<div class="meta"><b>Justification:</b></div>'
+    + '<div class="justification">' + escapeHtml(data.justification || '') + '</div>'
+    + '</body></html>';
+}
+
 // ---------- Email ----------
 
 /**
@@ -695,6 +878,36 @@ function sendCountyNotification(settings, data, requestId, timestamp, totalAmoun
   MailApp.sendEmail({
     to: settings.NotificationEmails.join(','),
     subject: 'Budget Transfer Request Submitted – Request #' + requestId,
+    body: body,
+    attachments: [pdfBlob],
+  });
+}
+
+/**
+ * Emails the submitted Rollforward request's PDF to every address in
+ * Settings!NotificationEmails — mirrors sendCountyNotification()'s shape.
+ * Only the county notification sends; the requester is not emailed,
+ * matching how Transfer submissions currently work.
+ */
+function sendRollforwardNotification(settings, data, requestId, timestamp, pdfBlob) {
+  if (settings.NotificationEmails.length === 0) return;
+
+  var department = data.department || {};
+  var amount = parseFloat(data.amount) || 0;
+
+  var body = 'A Fiscal Year Rollforward Request has been submitted.\n\n'
+    + 'Request ID:\n' + requestId + '\n\n'
+    + 'Department:\n' + (department.name || '—') + '\n\n'
+    + 'Amount Requested to Roll Forward:\n' + formatCurrency(amount) + '\n\n'
+    + 'Fiscal Year:\n' + (data.fiscalYear || '') + '\n\n'
+    + 'Requester:\n' + (data.requesterName || '') + '\n\n'
+    + 'Requester Email:\n' + (data.requesterEmail || '') + '\n\n'
+    + 'Submission Date:\n' + formatTimestampForEmail(timestamp) + '\n\n'
+    + 'The completed Rollforward Request is attached.';
+
+  MailApp.sendEmail({
+    to: settings.NotificationEmails.join(','),
+    subject: 'Fiscal Year Rollforward Request Submitted – Request #' + requestId,
     body: body,
     attachments: [pdfBlob],
   });

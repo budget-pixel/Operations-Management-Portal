@@ -79,6 +79,17 @@ window.BudgetApp.Validation = (function (Calculations) {
     return true;
   }
 
+  // Required checkbox (e.g. a certification statement) — reused wherever
+  // a form needs an "I certify..." style acknowledgment before submitting.
+  function validateCheckbox(checkbox, errorEl, message) {
+    if (!checkbox.checked) {
+      errorEl.textContent = message;
+      return false;
+    }
+    errorEl.textContent = '';
+    return true;
+  }
+
   // Project code is optional, but when present must be a plain 5-digit
   // number in the 10000-99999 range (not just any 5-character string —
   // e.g. "01234" has 5 digits but is numerically 1234, out of range).
@@ -155,6 +166,7 @@ window.BudgetApp.Validation = (function (Calculations) {
     validateRequiredField: validateRequiredField,
     validateAmendmentType: validateAmendmentType,
     validateDepartmentSelection: validateDepartmentSelection,
+    validateCheckbox: validateCheckbox,
     validateTransferRows: validateTransferRows,
     isValidEmail: isValidEmail,
     validateEmailField: validateEmailField,

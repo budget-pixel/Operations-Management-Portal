@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fiscal Year Rollforward Request</title>
+  <meta name="description" content="Request authorization to roll unspent budget into the next fiscal year." />
+  <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="rollforward">
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-seal">
+          <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        </span>
+        <span class="brand-text">
+          <span class="brand-top">Walton County</span>
+          <span class="brand-bottom">Board of County Commissioners</span>
+        </span>
+      </div>
+      <h1 class="page-title">Fiscal Year Rollforward Request</h1>
+    </div>
+  </header>
+
+  <nav id="siteNav"></nav>
+
+  <main class="page">
+
+    <!-- Chart of Accounts load status (loading / error / loaded+refresh) -->
+    <div id="coaStatusBanner" class="banner banner-info no-print" hidden></div>
+
+    <!-- Submission status banner -->
+    <div id="statusBanner" class="banner no-print" hidden></div>
+
+    <form id="rollforwardForm" novalidate>
+
+      <!-- Requester information -->
+      <section class="card">
+        <h2 class="section-title">Requester Information</h2>
+        <div class="card-body">
+          <div class="grid-2">
+            <div class="field">
+              <label for="requesterName">Requester Name <span class="required">*</span></label>
+              <input type="text" id="requesterName" name="requesterName" required />
+              <p class="error-text" id="requesterName-error"></p>
+            </div>
+            <div class="field">
+              <label for="requesterEmail">Requester Email <span class="required">*</span></label>
+              <input type="email" id="requesterEmail" name="requesterEmail" placeholder="you@waltoncountyfl.gov" required />
+              <p class="error-text" id="requesterEmail-error"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Department + Expense Account — same searchable combobox widget and
+           department-scoped filtering as the Budget Transfer page (see
+           js/accountSearch.js, js/departments.js, js/expenses.js). Only one
+           department/account pair here, unlike Transfer's Transfer From/To. -->
+      <section class="card">
+        <h2 class="section-title">Department &amp; Account</h2>
+        <div class="card-body">
+          <div class="field department-field">
+            <label for="departmentInput">Department <span class="required">*</span></label>
+            <div class="combobox" data-combobox="department">
+              <input type="text" id="departmentInput" class="department-input" placeholder="Search department by name or code..." aria-label="Department" />
+              <button type="button" class="combobox-clear no-print" aria-label="Clear department selection" hidden>&times;</button>
+              <ul class="combobox-listbox" id="departmentInput-listbox" role="listbox" hidden></ul>
+            </div>
+            <p class="error-text" id="department-error"></p>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <label for="accountInput">Expense Account <span class="required">*</span></label>
+              <div class="combobox" data-combobox="account">
+                <input type="text" id="accountInput" class="account-input" placeholder="Select a department first..." aria-label="Expense Account" disabled />
+                <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
+                <ul class="combobox-listbox" id="accountInput-listbox" role="listbox" hidden></ul>
+              </div>
+              <p class="error-text" id="account-error"></p>
+            </div>
+            <div class="field">
+              <label for="projectInput">Project Number</label>
+              <input type="text" id="projectInput" class="project-input" inputmode="numeric" maxlength="5" placeholder="Optional" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Rollforward details -->
+      <section class="card">
+        <h2 class="section-title">Rollforward Details</h2>
+        <div class="card-body">
+          <div class="grid-2">
+            <div class="field">
+              <label for="amountInput">Amount Requested to Roll Forward <span class="required">*</span></label>
+              <input type="text" id="amountInput" class="amount-input" inputmode="decimal" placeholder="0.00" required />
+              <p class="error-text" id="amount-error"></p>
+            </div>
+            <div class="field">
+              <label for="fiscalYearSelect">Fiscal Year <span class="required">*</span></label>
+              <select id="fiscalYearSelect" required>
+                <option value="">Select a fiscal year...</option>
+              </select>
+              <p class="error-text" id="fiscalYear-error"></p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="justification">Detailed Justification <span class="required">*</span></label>
+            <textarea id="justification" name="justification" rows="6" placeholder="Explain why this unspent budget needs to roll forward..." required></textarea>
+            <p class="error-text" id="justification-error"></p>
+          </div>
+
+          <label class="checkbox-field">
+            <input type="checkbox" id="certification" required />
+            <span>I certify that the requested rollforward is necessary and that the justification provided is accurate.</span>
+          </label>
+          <p class="error-text" id="certification-error"></p>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div class="actions no-print">
+        <button type="submit" id="submitBtn" class="btn btn-primary">Submit Rollforward Request</button>
+        <button type="button" id="clearBtn" class="btn btn-danger">Clear Form</button>
+      </div>
+
+    </form>
+
+  </main>
+
+  <!-- Submission confirmation pop-up — shown after a successful Submit
+       (see js/rollforward.js's showSubmissionModal()). -->
+  <div id="submissionModal" class="modal-overlay no-print" hidden>
+    <div class="modal-dialog" role="alertdialog" aria-modal="true" aria-labelledby="submissionModalTitle" aria-describedby="submissionModalBody">
+      <h2 id="submissionModalTitle">Request Submitted</h2>
+      <p id="submissionModalBody"></p>
+      <div class="modal-actions">
+        <button type="button" id="submissionModalCloseBtn" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load order matters: each module expects the ones before it to
+       already be attached to window.BudgetApp by the time it runs. -->
+  <script src="js/calculations.js"></script>
+  <script src="js/googleSheets.js"></script>
+  <script src="js/departments.js"></script>
+  <script src="js/expenses.js"></script>
+  <script src="js/accountSearch.js"></script>
+  <script src="js/validation.js"></script>
+  <script src="js/submission.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/rollforward.js"></script>
+</body>
+</html>

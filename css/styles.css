@@ -155,6 +155,96 @@ h3 {
   text-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
 }
 
+/* ---------- Site navigation (rendered by js/nav.js) ---------- */
+
+.site-nav {
+  background: var(--color-green-3);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+}
+
+.site-nav a {
+  color: rgba(255, 255, 255, 0.82);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.site-nav a:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.site-nav a.is-active {
+  background: var(--color-gold);
+  color: var(--color-green-3);
+}
+
+/* ---------- Landing page ---------- */
+
+.hero {
+  text-align: center;
+  padding: 1rem 0 2rem;
+}
+
+.hero h1 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 2rem;
+  color: var(--color-green-3);
+  margin-bottom: 0.6rem;
+}
+
+.hero p {
+  color: var(--color-muted);
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.landing-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+@media (min-width: 700px) {
+  .landing-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.landing-card {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  padding: 2rem 1.5rem;
+}
+
+.landing-card h2 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 1.3rem;
+  color: var(--color-green-3);
+  margin-bottom: 0.75rem;
+}
+
+.landing-card p {
+  color: var(--color-muted);
+  flex-grow: 1;
+  margin: 0 0 1.5rem;
+}
+
+.landing-card .btn {
+  align-self: center;
+}
+
 /* ---------- Page layout ---------- */
 
 .page {
@@ -239,6 +329,8 @@ label {
 
 input[type="text"],
 input[type="date"],
+input[type="email"],
+select,
 textarea {
   width: 100%;
   padding: 0.55rem 0.7rem;
@@ -257,6 +349,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--color-green);
@@ -264,12 +357,14 @@ textarea:focus {
 }
 
 input[aria-invalid="true"],
+select[aria-invalid="true"],
 textarea[aria-invalid="true"] {
   border-color: var(--color-red-border);
   background: var(--color-red-bg);
 }
 
 input:disabled,
+select:disabled,
 textarea:disabled {
   background: var(--color-soft);
   color: var(--color-muted);
@@ -340,6 +435,40 @@ textarea:disabled {
   color: var(--color-muted);
   font-weight: 400;
   margin-top: 0.15rem;
+}
+
+/* ---------- Certification checkbox (mirrors .radio-option) ---------- */
+
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.checkbox-field:hover {
+  background: var(--color-soft);
+}
+
+.checkbox-field input[type="checkbox"] {
+  margin-top: 0.2rem;
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--color-green);
+  flex-shrink: 0;
+}
+
+.checkbox-field:has(input:checked) {
+  border-color: var(--color-green-border);
+  background: var(--color-green-bg);
+}
+
+.checkbox-field span {
+  font-size: 0.9rem;
 }
 
 /* ---------- Searchable comboboxes (department + account) ---------- */
