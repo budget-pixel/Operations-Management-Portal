@@ -68,7 +68,7 @@ Budget-Transfer-Request/
 │       └── Code.gs             Apps Script source to paste into your spreadsheet's script editor
 ├── assets/
 │   ├── images/
-│   │   └── logo-placeholder.png  Generic header logo placeholder
+│   │   └── walton-county-seal.png  Official county seal (header + print)
 │   └── icons/                  Reserved for future standalone icon assets
 ├── forms/                      Reserved for future additional form variants
 └── README.md                   This file
@@ -93,10 +93,18 @@ everything above them only ever call `load()`/`search()`/`getByDepartment()`.
 Pointing those three repositories at a real database later means changing
 only `googleSheets.js`, with no UI changes required.
 
+## Design
+
+Visual style (colors, typography, header lockup, seal treatment) matches
+[budget-waltoncountyfl.com](https://budget-waltoncountyfl.com/) — Walton
+County's green (`#006231`)/gold (`#d1be78`) brand, Arial/Helvetica body
+text, and a Georgia serif accent reserved for the page title, same as the
+reference site's own usage. The county seal (used with permission) lives at
+`assets/images/walton-county-seal.png` and appears in both the on-screen
+header and the print view.
+
 ## Notes
 
-- The header logo is a generic placeholder icon, not an official county seal.
-  Swap `assets/images/logo-placeholder.png` for a real logo whenever you're ready.
 - There is no backend — "Submit" validates the form and displays a
   confirmation message, but does not send data anywhere. Use **Print** to
   produce a physical/PDF copy for routing and signatures.

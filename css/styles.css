@@ -2,40 +2,45 @@
    Budget Amendment Request — Stylesheet
    Plain CSS3, no frameworks. Mobile-first with breakpoints
    for tablet (600px) and desktop (900px).
+
+   Palette/typography match budget-waltoncountyfl.com (Walton
+   County's official brand green/gold, Arial/Helvetica body
+   text, Georgia serif reserved for the page title only).
    ========================================================= */
 
 :root {
-  --color-navy: #1e3a5f;
-  --color-navy-dark: #142944;
-  --color-blue: #2563eb;
-  --color-blue-dark: #1d4ed8;
-  --color-blue-light: #eff6ff;
+  --color-green: #006231;
+  --color-green-2: #0b7741;
+  --color-green-3: #003f28;
+  --color-gold: #d1be78;
+  --color-gold-2: #f1dc94;
 
   --color-bg: #ffffff;
-  --color-page-bg: #f3f4f6;
-  --color-card-header-bg: #f3f4f6;
-  --color-border: #d1d5db;
-  --color-border-light: #e5e7eb;
+  --color-page-bg: #f6f8f5;
+  --color-soft: #f6f8f5;
+  --color-border: #d6dbdc;
+  --color-line: rgba(23, 32, 51, 0.11);
 
-  --color-text: #1f2937;
-  --color-text-muted: #6b7280;
+  --color-ink: #172033;
+  --color-muted: #607184;
 
   --color-red: #b91c1c;
   --color-red-bg: #fef2f2;
   --color-red-border: #fca5a5;
 
-  --color-green: #15803d;
-  --color-green-bg: #f0fdf4;
-  --color-green-border: #86efac;
+  --color-green-bg: rgba(0, 98, 49, 0.08);
+  --color-green-border: rgba(0, 98, 49, 0.3);
 
   --color-amber: #92400e;
   --color-amber-bg: #fffbeb;
   --color-amber-border: #fcd34d;
 
-  --radius: 10px;
-  --radius-sm: 6px;
-  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius: 18px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+  --shadow-card: 0 12px 32px rgba(23, 32, 51, 0.1);
+  --font-body: Arial, Helvetica, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
 }
 
 * {
@@ -61,8 +66,10 @@ body {
 }
 
 body {
-  background: var(--color-page-bg);
-  color: var(--color-text);
+  background:
+    radial-gradient(circle at top left, rgba(209, 190, 120, 0.14), transparent 34rem),
+    linear-gradient(180deg, #fbfcfa 0%, #f3f7f1 45%, #ffffff 100%);
+  color: var(--color-ink);
   font-family: var(--font-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -77,7 +84,7 @@ h3 {
 /* ---------- Site header ---------- */
 
 .site-header {
-  background: linear-gradient(135deg, var(--color-navy), var(--color-navy-dark));
+  background: linear-gradient(135deg, #23354d 0%, var(--color-green-2) 58%, var(--color-gold) 100%);
   color: #ffffff;
   padding: 1.5rem 1rem;
 }
@@ -86,31 +93,66 @@ h3 {
   max-width: 960px;
   margin: 0 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1rem;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
 }
 
-.logo {
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brand-seal {
   width: 56px;
   height: 56px;
-  border-radius: 50%;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
   background: #ffffff;
-  padding: 2px;
+  border: 3px solid var(--color-gold);
+  overflow: hidden;
 }
 
-.eyebrow {
-  margin: 0 0 0.15rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+.brand-seal img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-top {
+  font-size: 1.05rem;
+  font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #bfdbfe;
+  line-height: 1.15;
+  color: #ffffff;
 }
 
-.site-header h1 {
-  font-size: 1.4rem;
-  font-weight: 700;
+.brand-bottom {
+  margin-top: 0.2rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.page-title {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 1.6rem;
+  color: #ffffff;
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
 }
 
 /* ---------- Page layout ---------- */
@@ -123,7 +165,7 @@ h3 {
 
 .card {
   background: var(--color-bg);
-  border: 1px solid var(--color-border-light);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
   margin-bottom: 1.25rem;
@@ -133,11 +175,11 @@ h3 {
 }
 
 .section-title {
-  background: var(--color-card-header-bg);
-  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-soft);
+  border-bottom: 1px solid var(--color-line);
   border-top-left-radius: var(--radius);
   border-top-right-radius: var(--radius);
-  color: var(--color-text);
+  color: var(--color-ink);
   font-size: 1rem;
   font-weight: 700;
   padding: 0.85rem 1.25rem;
@@ -187,7 +229,7 @@ label {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-ink);
   margin-bottom: 0.35rem;
 }
 
@@ -202,7 +244,7 @@ textarea {
   padding: 0.55rem 0.7rem;
   font-size: 0.95rem;
   font-family: inherit;
-  color: var(--color-text);
+  color: var(--color-ink);
   background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -217,8 +259,8 @@ textarea {
 input:focus,
 textarea:focus {
   outline: none;
-  border-color: var(--color-blue);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  border-color: var(--color-green);
+  box-shadow: 0 0 0 3px rgba(0, 98, 49, 0.15);
 }
 
 input[aria-invalid="true"],
@@ -229,8 +271,8 @@ textarea[aria-invalid="true"] {
 
 input:disabled,
 textarea:disabled {
-  background: var(--color-page-bg);
-  color: var(--color-text-muted);
+  background: var(--color-soft);
+  color: var(--color-muted);
   cursor: not-allowed;
 }
 
@@ -246,7 +288,7 @@ textarea:disabled {
 }
 
 .field-hint {
-  color: var(--color-text-muted);
+  color: var(--color-muted);
   font-size: 0.9rem;
   margin: 0;
 }
@@ -264,38 +306,38 @@ textarea:disabled {
   align-items: flex-start;
   gap: 0.7rem;
   padding: 0.75rem 0.9rem;
-  border: 1px solid var(--color-border-light);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .radio-option:hover {
-  background: var(--color-page-bg);
+  background: var(--color-soft);
 }
 
 .radio-option input[type="radio"] {
   margin-top: 0.2rem;
   width: 1rem;
   height: 1rem;
-  accent-color: var(--color-blue);
+  accent-color: var(--color-green);
   flex-shrink: 0;
 }
 
 .radio-option:has(input:checked),
 .radio-option.is-checked {
-  border-color: var(--color-blue);
-  background: var(--color-blue-light);
+  border-color: var(--color-green-border);
+  background: var(--color-green-bg);
 }
 
 .radio-option .statute {
-  color: var(--color-text-muted);
+  color: var(--color-muted);
   font-weight: 400;
 }
 
 .radio-option small {
   display: block;
-  color: var(--color-text-muted);
+  color: var(--color-muted);
   font-weight: 400;
   margin-top: 0.15rem;
 }
@@ -319,7 +361,7 @@ textarea:disabled {
   height: 1.6rem;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-muted);
   font-size: 1.1rem;
   line-height: 1;
   border-radius: 50%;
@@ -327,8 +369,8 @@ textarea:disabled {
 }
 
 .combobox-clear:hover {
-  background: var(--color-page-bg);
-  color: var(--color-text);
+  background: var(--color-soft);
+  color: var(--color-ink);
 }
 
 /* position/top/left/width are set inline by accountSearch.js, computed
@@ -346,7 +388,7 @@ textarea:disabled {
   background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 20px rgba(23, 32, 51, 0.14);
 }
 
 .combobox-listbox[hidden] {
@@ -359,7 +401,7 @@ textarea:disabled {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-muted);
+  color: var(--color-muted);
 }
 
 .combobox-option {
@@ -372,23 +414,23 @@ textarea:disabled {
 
 .combobox-option-label {
   font-size: 0.9rem;
-  color: var(--color-text);
+  color: var(--color-ink);
 }
 
 .combobox-option-sublabel {
   font-size: 0.78rem;
-  color: var(--color-text-muted);
+  color: var(--color-muted);
 }
 
 .combobox-option:hover,
 .combobox-option.is-active {
-  background: var(--color-blue-light);
+  background: var(--color-green-bg);
 }
 
 .combobox-empty {
   padding: 0.6rem;
   font-size: 0.85rem;
-  color: var(--color-text-muted);
+  color: var(--color-muted);
 }
 
 .department-field {
@@ -425,7 +467,7 @@ textarea:disabled {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-muted);
+  color: var(--color-muted);
   padding: 0 0 0.4rem;
 }
 
@@ -443,8 +485,8 @@ textarea:disabled {
   height: 2.1rem;
   border: 1px solid var(--color-border);
   background: #ffffff;
-  color: var(--color-text-muted);
-  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  border-radius: 50%;
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
@@ -472,7 +514,7 @@ textarea:disabled {
   justify-content: space-between;
   margin-top: 1rem;
   padding-top: 0.85rem;
-  border-top: 1px solid var(--color-border-light);
+  border-top: 1px solid var(--color-line);
   font-weight: 700;
 }
 
@@ -487,11 +529,12 @@ textarea:disabled {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  padding: 0.6rem 1.1rem;
+  min-height: 2.5rem;
+  padding: 0.6rem 1.25rem;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 700;
   font-family: inherit;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
@@ -503,24 +546,24 @@ textarea:disabled {
 }
 
 .btn-primary {
-  background: var(--color-blue);
-  border-color: var(--color-blue);
+  background: var(--color-green);
+  border-color: var(--color-green);
   color: #ffffff;
 }
 
 .btn-primary:hover {
-  background: var(--color-blue-dark);
-  border-color: var(--color-blue-dark);
+  background: var(--color-green-3);
+  border-color: var(--color-green-3);
 }
 
 .btn-secondary {
   background: #ffffff;
-  border-color: var(--color-border);
-  color: var(--color-text);
+  border-color: var(--color-line);
+  color: var(--color-ink);
 }
 
 .btn-secondary:hover {
-  background: var(--color-page-bg);
+  background: var(--color-soft);
 }
 
 .btn-danger {
@@ -536,9 +579,10 @@ textarea:disabled {
 .btn-ghost {
   background: transparent;
   border-color: transparent;
-  color: var(--color-blue);
-  padding-left: 0.3rem;
-  padding-right: 0.3rem;
+  color: var(--color-green);
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  min-height: auto;
 }
 
 .btn-ghost:hover {
@@ -581,7 +625,7 @@ textarea:disabled {
 .banner-success {
   background: var(--color-green-bg);
   border-color: var(--color-green-border);
-  color: var(--color-green);
+  color: var(--color-green-3);
 }
 
 .banner-error {
@@ -591,9 +635,9 @@ textarea:disabled {
 }
 
 .banner-info {
-  background: var(--color-page-bg);
-  border-color: var(--color-border);
-  color: var(--color-text-muted);
+  background: var(--color-soft);
+  border-color: var(--color-line);
+  color: var(--color-muted);
 }
 
 .banner-actions {
@@ -611,8 +655,26 @@ textarea:disabled {
   display: none;
 }
 
+.print-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.print-seal {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  object-fit: contain;
+  margin-top: 0.15rem;
+}
+
 .print-header h1 {
-  font-size: 1.25rem;
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 1.3rem;
+  color: var(--color-green-3);
   margin-bottom: 0.5rem;
 }
 
@@ -626,6 +688,7 @@ textarea:disabled {
 
 .print-field-label {
   font-weight: 700;
+  color: var(--color-green-3);
 }
 
 .print-tables {
@@ -637,6 +700,7 @@ textarea:disabled {
 
 .print-tables h2 {
   font-size: 0.95rem;
+  color: var(--color-green-3);
   margin: 0 0 0.4rem;
 }
 
@@ -649,6 +713,10 @@ textarea:disabled {
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.8rem;
+}
+
+.print-table th {
+  background: var(--color-soft);
 }
 
 .print-table th,
@@ -670,6 +738,7 @@ textarea:disabled {
   font-weight: 700;
   font-size: 0.85rem;
   text-align: right;
+  color: var(--color-green-3);
 }
 
 @media print {

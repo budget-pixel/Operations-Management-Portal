@@ -5,18 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Budget Amendment Request</title>
   <meta name="description" content="Submit and manage budget amendment / transfer requests." />
-  <link rel="icon" type="image/png" href="assets/images/logo-placeholder.png" />
+  <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
 
   <header class="site-header">
     <div class="header-inner">
-      <img class="logo" src="assets/images/logo-placeholder.png" alt="County office logo placeholder" />
-      <div>
-        <p class="eyebrow">Office of Management and Budget</p>
-        <h1>Budget Amendment Request</h1>
+      <div class="brand">
+        <span class="brand-seal">
+          <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        </span>
+        <span class="brand-text">
+          <span class="brand-top">Walton County</span>
+          <span class="brand-bottom">Board of County Commissioners</span>
+        </span>
       </div>
+      <h1 class="page-title">Budget Amendment Request</h1>
     </div>
   </header>
 
@@ -210,20 +215,23 @@
          amendment-type descriptions). -->
     <div id="printView" class="print-only">
       <div class="print-header">
-        <h1>Budget Amendment Request</h1>
-        <div class="print-meta-row">
-          <span><span class="print-field-label">Date:</span> <span id="printDate"></span></span>
-          <span><span class="print-field-label">Prepared By:</span> <span id="printPreparedBy"></span></span>
-          <span><span class="print-field-label">Title:</span> <span id="printTitle"></span></span>
-        </div>
-        <div class="print-meta-row">
-          <span><span class="print-field-label">Amendment Type:</span> <span id="printAmendmentType"></span></span>
-        </div>
-        <div class="print-meta-row">
-          <span id="printDepartmentLine"></span>
-        </div>
-        <div class="print-meta-row" id="printDescriptionRow" hidden>
-          <span><span class="print-field-label">Description:</span> <span id="printDescription"></span></span>
+        <img class="print-seal" src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        <div>
+          <h1>Budget Amendment Request</h1>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Date:</span> <span id="printDate"></span></span>
+            <span><span class="print-field-label">Prepared By:</span> <span id="printPreparedBy"></span></span>
+            <span><span class="print-field-label">Title:</span> <span id="printTitle"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Amendment Type:</span> <span id="printAmendmentType"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span id="printDepartmentLine"></span>
+          </div>
+          <div class="print-meta-row" id="printDescriptionRow" hidden>
+            <span><span class="print-field-label">Description:</span> <span id="printDescription"></span></span>
+          </div>
         </div>
       </div>
 
