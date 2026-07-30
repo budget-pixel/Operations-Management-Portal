@@ -6,9 +6,9 @@ yourself. This keeps your spreadsheet completely private — no API key is
 ever embedded in the website's code, and nothing needs to be shared publicly.
 The same Apps Script also *receives* submitted requests (§6 below): it
 generates a PDF, records the request in two more tabs in this same
-workbook, and emails the PDF to Budget Office staff and the requestor. The
-PDF is never saved anywhere (no Google Drive) — it only exists long enough
-to attach to those two emails.
+workbook, and emails the PDF to Budget Office staff. The PDF is never
+saved anywhere (no Google Drive) — it only exists long enough to attach to
+that email.
 
 ## 1. Prepare the spreadsheet
 
@@ -69,9 +69,9 @@ only the code, which is what accounts are filtered by.
 4. Click **Deploy**, then **Authorize access** and approve the permissions
    prompt (you'll see an "unverified app" warning — this is expected for a
    script only you use; click **Advanced → Go to (project name)** to proceed).
-   Submitting a request needs Gmail access (to send the notification/
-   confirmation emails) in addition to Sheets — you should see both
-   requested in this consent screen. If you don't (or a submission later
+   Submitting a request needs Gmail access (to send the notification
+   email) in addition to Sheets — you should see both requested in this
+   consent screen. If you don't (or a submission later
    fails with a Mail permission error), see the `authorizeAdditionalScopes`
    troubleshooting step below.
 5. Copy the **Web app URL** shown after deployment. It looks like:
@@ -102,10 +102,10 @@ redeploy the Apps Script for data edits, only if you change `Code.gs` itself.
 Clicking **Submit Budget Transfer Request** on the site sends the completed
 form to the same Apps Script, which generates a PDF, records the request
 across two more tabs in this workbook, and emails the PDF to Budget Office
-staff and the requestor. The PDF itself is never saved anywhere — it's
-built fresh for each submission, attached to both emails, and discarded.
-This needs three more tabs, none of which existed for the read-only Chart
-of Accounts setup above.
+staff. The PDF itself is never saved anywhere — it's built fresh for each
+submission, attached to that email, and discarded. This needs three more
+tabs, none of which existed for the read-only Chart of Accounts setup
+above.
 
 **Settings** — `Setting | Value` columns. One row per setting:
 
@@ -172,9 +172,9 @@ workflow to fill in without changing the sheet's structure.
   the point is triggering the consent screen). Your existing deployment
   URL doesn't change; it'll just start working once the scope is granted.
 - **No emails arrive, but the request appears in Sheets** — check
-  `NotificationEmails` in Settings for typos, and check the requestor's
-  spam folder. The Sheets write and email sending are independent steps;
-  a request can be fully saved even if an email address is wrong.
+  `NotificationEmails` in Settings for typos or expired addresses. The
+  Sheets write and email sending are independent steps; a request can be
+  fully saved even if the notification email fails to send.
 - **Want more detail on a failed submission** — open the Apps Script editor
   → **Executions** (left sidebar) → find the failed `doPost` run. The full
   error and stack trace are logged there even though the website only shows

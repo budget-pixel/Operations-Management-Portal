@@ -5,10 +5,10 @@ Request paper form. No frameworks, no build tools, no dependencies — just
 open `index.html` in a browser. Department and Account fields are searchable
 dropdowns driven live by a Google Sheets Chart of Accounts, and submitting a
 request generates a PDF, records it across two more worksheets in that same
-spreadsheet, and emails the PDF to Budget Office staff and the requestor —
-all handled by the same Google Apps Script backend. The PDF is never
-saved anywhere; it's built fresh per submission just to attach to those
-two emails.
+spreadsheet, and emails the PDF to Budget Office staff — all handled by the
+same Google Apps Script backend. The PDF is never saved anywhere; it's
+built fresh per submission just to attach to that email. A pop-up confirms
+the submission to the requestor on-screen.
 
 ## Getting Started
 
@@ -38,8 +38,8 @@ two emails.
   that Transfer From and Transfer To totals match before submitting
 - **Submit Budget Transfer Request** — validates the form, then generates a
   PDF, records the request (and each transfer line) in the spreadsheet, and
-  emails the PDF to Budget Office staff and the requestor. Shows a unique
-  Request ID on success
+  emails the PDF to Budget Office staff. A pop-up confirms the Request ID
+  and that the request was submitted to the Office of Management and Budget
 - **Save Draft** — stores the current form state (including department/account
   selections) in the browser's Local Storage
 - **Automatic draft restore** — if a saved draft exists, you're prompted to
@@ -123,9 +123,11 @@ header and the print view.
   `window.print()` of the current on-screen form — nothing is sent
   anywhere. Submit is the one action that actually sends the request
   anywhere: it POSTs to the Apps Script backend, which generates a *separate*
-  PDF from the submitted data, records the request, and emails that PDF out
-  (the PDF itself is never saved anywhere — it exists only long enough to
-  attach to the two emails). See [`docs/google-sheets-integration.md`](docs/google-sheets-integration.md#6-set-up-request-submission-sheets-storage--email)
+  PDF from the submitted data, records the request, and emails that PDF to
+  Budget Office staff (the PDF itself is never saved anywhere — it exists
+  only long enough to attach to that email). A pop-up confirms the
+  submission on-screen; no confirmation email is sent to the requestor.
+  See [`docs/google-sheets-integration.md`](docs/google-sheets-integration.md#6-set-up-request-submission-sheets-storage--email)
   for the one-time setup (three more worksheets and a Settings sheet for
   notification emails) required before Submit will work.
 - Draft data is stored only in your browser's Local Storage on this device;

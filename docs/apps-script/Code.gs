@@ -7,9 +7,9 @@
  * the COA tabs for the website's dropdowns (doGet) and, separately,
  * receives completed Budget Transfer Requests (doPost): generates a PDF,
  * records the request in two normalized worksheets, and emails the PDF to
- * Budget Office staff and the requestor. The PDF is never saved anywhere
- * (no Google Drive) — it exists only in memory for as long as it takes to
- * attach it to those two outgoing emails.
+ * Budget Office staff. The PDF is never saved anywhere (no Google Drive) —
+ * it exists only in memory for as long as it takes to attach it to that
+ * outgoing email.
  *
  * Expected tabs and exact header row text:
  *
@@ -34,8 +34,8 @@
  * touching this file. See getSettings().
  *
  * Deploying doPost for the first time adds a new required scope (Gmail,
- * to send the notification/confirmation emails) beyond doGet's read-only
- * Sheets access. Deploying a "new version" of an existing deployment does
+ * to send the notification email) beyond doGet's read-only Sheets access.
+ * Deploying a "new version" of an existing deployment does
  * NOT reliably re-prompt for that new scope on its own — see
  * authorizeAdditionalScopes() below if doPost fails with a permission
  * error on MailApp.
@@ -250,7 +250,6 @@ function doPost(e) {
     });
 
     sendCountyNotification(settings, requestData, requestId, timestamp, totalAmount, pdfBlob);
-    sendRequestorConfirmation(requestData, requestId, pdfBlob);
 
     return jsonResponse({
       success: true,
@@ -354,6 +353,7 @@ function validateSubmission(data) {
     return ['Malformed request payload.'];
   }
   if (!data.date) errors.push('Date is required.');
+  if (!data.description) errors.push('Description is required.');
   if (!data.preparedBy) errors.push('Prepared By is required.');
   if (!data.title) errors.push('Title is required.');
   if (!data.requestorEmail || !isValidEmailFormat(data.requestorEmail)) {
@@ -625,8 +625,15 @@ function buildRequestHtml(data, requestId, timestamp, lines, totalAmount) {
     + '.table-col{display:inline-block;width:48%;vertical-align:top;}'
     + '.table-col + .table-col{margin-left:3%;}'
     + 'h2{font-size:13px;margin:0 0 4px;color:#003f28;}'
-    + 'table{border-collapse:collapse;width:100%;}'
-    + 'th,td{border:1px solid #999999;padding:4px 6px;text-align:left;font-size:10px;}'
+    // table-layout:fixed + the matching <colgroup> in buildLinesTableHtml
+    // (33/42/25) keep both tables' column widths identical regardless of
+    // content length — without this, a wrapping Description/Account
+    // Number cell in one table (like a project-code account number) makes
+    // its columns auto-size wider than the other table's, so the two
+    // tables visibly don't line up. Mirrors the client print view's
+    // .print-table CSS (css/styles.css), which uses the same fix.
+    + 'table{border-collapse:collapse;width:100%;table-layout:fixed;}'
+    + 'th,td{border:1px solid #999999;padding:4px 6px;text-align:left;font-size:10px;word-wrap:break-word;}'
     + 'th{background:#f6f8f5;}'
     + 'td:last-child,th:last-child{text-align:right;white-space:nowrap;}'
     + '.total{text-align:right;font-weight:bold;margin-top:4px;font-size:10px;}';
@@ -656,7 +663,8 @@ function buildLinesTableHtml(lines) {
       + '<td>' + formatCurrency(line.amount) + '</td></tr>';
   }).join('');
 
-  return '<table><thead><tr><th>Account Number</th><th>Description</th><th>Amount</th></tr></thead>'
+  return '<table><colgroup><col style="width:33%"><col style="width:42%"><col style="width:25%"></colgroup>'
+    + '<thead><tr><th>Account Number</th><th>Description</th><th>Amount</th></tr></thead>'
     + '<tbody>' + rowsHtml + '</tbody></table>';
 }
 
@@ -687,20 +695,6 @@ function sendCountyNotification(settings, data, requestId, timestamp, totalAmoun
   MailApp.sendEmail({
     to: settings.NotificationEmails.join(','),
     subject: 'Budget Transfer Request Submitted – Request #' + requestId,
-    body: body,
-    attachments: [pdfBlob],
-  });
-}
-
-function sendRequestorConfirmation(data, requestId, pdfBlob) {
-  var body = 'Thank you for submitting your Budget Transfer Request.\n\n'
-    + 'Request ID:\n' + requestId + '\n\n'
-    + 'Your request has been successfully submitted and forwarded to the Budget Office for review.\n\n'
-    + 'A copy of your completed Budget Transfer Request is attached for your records.';
-
-  MailApp.sendEmail({
-    to: data.requestorEmail,
-    subject: 'Your Budget Transfer Request Has Been Submitted',
     body: body,
     attachments: [pdfBlob],
   });

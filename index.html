@@ -55,8 +55,9 @@
           </div>
 
           <div class="field">
-            <label for="description">Information concerning the following budget amendment request</label>
-            <textarea id="description" name="description" rows="4" placeholder="Describe the purpose of this budget amendment..."></textarea>
+            <label for="description">Information concerning the following budget amendment request <span class="required">*</span></label>
+            <textarea id="description" name="description" rows="4" placeholder="Describe the purpose of this budget amendment..." required></textarea>
+            <p class="error-text" id="description-error"></p>
           </div>
 
           <div class="grid-2">
@@ -277,6 +278,18 @@
       </div>
     </div>
   </main>
+
+  <!-- Submission confirmation pop-up — shown after a successful Submit
+       (see js/app.js's showSubmissionModal()). -->
+  <div id="submissionModal" class="modal-overlay no-print" hidden>
+    <div class="modal-dialog" role="alertdialog" aria-modal="true" aria-labelledby="submissionModalTitle" aria-describedby="submissionModalBody">
+      <h2 id="submissionModalTitle">Request Submitted</h2>
+      <p id="submissionModalBody"></p>
+      <div class="modal-actions">
+        <button type="button" id="submissionModalCloseBtn" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Template for a single Transfer From/To table row. The account cell
        is a searchable combobox (wired up in app.js) instead of a plain

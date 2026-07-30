@@ -84,9 +84,14 @@
 
   var requiredFields = [
     { input: document.getElementById('date'), error: document.getElementById('date-error'), message: 'Date is required.' },
+    { input: document.getElementById('description'), error: document.getElementById('description-error'), message: 'Description is required.' },
     { input: document.getElementById('preparedBy'), error: document.getElementById('preparedBy-error'), message: 'Prepared By is required.' },
     { input: document.getElementById('title'), error: document.getElementById('title-error'), message: 'Title is required.' },
   ];
+
+  var submissionModal = document.getElementById('submissionModal');
+  var submissionModalBody = document.getElementById('submissionModalBody');
+  var submissionModalCloseBtn = document.getElementById('submissionModalCloseBtn');
 
   // -----------------------------------------------------------
   // Department selection state
@@ -702,35 +707,26 @@
     submitBtn.textContent = isSubmitting ? 'Submitting…' : submitBtnDefaultLabel;
   }
 
-  // Rich confirmation shown once the server accepts a submission: Request
-  // ID and who was emailed — matches the confirmation copy from the
-  // feature spec. No PDF link: the server never saves the PDF anywhere
-  // (it's built fresh, attached to both emails, and discarded), so there's
-  // nothing to link to — the requestor's own inbox is the copy of record.
-  function showSubmissionSuccess(requestId, requestorEmail) {
-    statusBanner.className = 'banner no-print banner-success';
-    statusBanner.innerHTML = '';
-
-    var textWrap = document.createElement('div');
-
-    var heading = document.createElement('strong');
-    heading.textContent = 'Budget Transfer Request Submitted Successfully';
-    textWrap.appendChild(heading);
-
-    [
-      'Request ID: ' + requestId,
-      'A confirmation email has been sent to: ' + requestorEmail,
-      'Budget Office staff have also been notified.',
-      'Your completed Budget Transfer Request has been emailed to you for your records.',
-    ].forEach(function (line) {
-      var lineEl = document.createElement('div');
-      lineEl.textContent = line;
-      textWrap.appendChild(lineEl);
-    });
-
-    statusBanner.appendChild(textWrap);
-    statusBanner.hidden = false;
+  // Pop-up shown once the server accepts a submission — replaces the old
+  // inline banner confirmation so the Request ID is impossible to miss.
+  function showSubmissionModal(requestId) {
+    submissionModalBody.textContent = 'Your Budget Transfer Request has been submitted to the '
+      + 'Office of Management and Budget. Request ID: ' + requestId;
+    submissionModal.hidden = false;
+    submissionModalCloseBtn.focus();
   }
+
+  function hideSubmissionModal() {
+    submissionModal.hidden = true;
+  }
+
+  submissionModalCloseBtn.addEventListener('click', hideSubmissionModal);
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !submissionModal.hidden) {
+      hideSubmissionModal();
+    }
+  });
 
   function showCoaBanner(variant, text) {
     coaStatusBanner.className = 'banner no-print ' + variant;
@@ -935,7 +931,8 @@
 
     Submission.submit(requestData)
       .then(function (result) {
-        showSubmissionSuccess(result.requestId, requestData.requestorEmail);
+        hideStatus();
+        showSubmissionModal(result.requestId);
         // The request is now officially submitted — an old "restore
         // draft?" prompt on a future visit would just be stale.
         Storage.clearDraft();
