@@ -56,12 +56,10 @@
         </div>
       </section>
 
-      <!-- Department + Expense Account — same searchable combobox widget and
-           department-scoped filtering as the Budget Transfer page (see
-           js/accountSearch.js, js/departments.js, js/expenses.js). Only one
-           department/account pair here, unlike Transfer's Transfer From/To. -->
+      <!-- Department — governs every account below, same as the Budget
+           Transfer page's per-section department (see js/departments.js). -->
       <section class="card">
-        <h2 class="section-title">Department &amp; Account</h2>
+        <h2 class="section-title">Department</h2>
         <div class="card-body">
           <div class="field department-field">
             <label for="departmentInput">Department <span class="required">*</span></label>
@@ -72,48 +70,37 @@
             </div>
             <p class="error-text" id="department-error"></p>
           </div>
+        </div>
+      </section>
 
-          <div class="grid-2">
-            <div class="field">
-              <label for="accountInput">Expense Account <span class="required">*</span></label>
-              <div class="combobox" data-combobox="account">
-                <input type="text" id="accountInput" class="account-input" placeholder="Select a department first..." aria-label="Expense Account" disabled />
-                <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
-                <ul class="combobox-listbox" id="accountInput-listbox" role="listbox" hidden></ul>
-              </div>
-              <p class="error-text" id="account-error"></p>
-            </div>
-            <div class="field">
-              <label for="projectInput">Project Number</label>
-              <input type="text" id="projectInput" class="project-input" inputmode="numeric" maxlength="5" placeholder="Optional" />
-            </div>
+      <!-- Accounts to roll forward — one or more repeatable line items, each
+           with its own searchable Expense Account combobox (see
+           js/accountSearch.js, js/expenses.js, scoped to the department
+           above), Amount, and Justification. Rows are injected/cloned from
+           #rollforwardLineTemplate by js/rollforward.js. -->
+      <section class="card">
+        <h2 class="section-title">Accounts to Roll Forward</h2>
+        <div class="card-body">
+          <div id="rollforwardLines"><!-- line blocks injected by js/rollforward.js --></div>
+          <button type="button" id="addLineBtn" class="btn btn-ghost add-row-btn no-print">+ Add Another Rollforward Request</button>
+          <div class="total-row">
+            <span>Total</span>
+            <span id="linesTotal">$0.00</span>
           </div>
         </div>
       </section>
 
-      <!-- Rollforward details -->
+      <!-- Fiscal year + certification — cover the whole submission, not
+           any one account. -->
       <section class="card">
-        <h2 class="section-title">Rollforward Details</h2>
+        <h2 class="section-title">Fiscal Year &amp; Certification</h2>
         <div class="card-body">
-          <div class="grid-2">
-            <div class="field">
-              <label for="amountInput">Amount Requested to Roll Forward <span class="required">*</span></label>
-              <input type="text" id="amountInput" class="amount-input" inputmode="decimal" placeholder="0.00" required />
-              <p class="error-text" id="amount-error"></p>
-            </div>
-            <div class="field">
-              <label for="fiscalYearSelect">Fiscal Year <span class="required">*</span></label>
-              <select id="fiscalYearSelect" required>
-                <option value="">Select a fiscal year...</option>
-              </select>
-              <p class="error-text" id="fiscalYear-error"></p>
-            </div>
-          </div>
-
           <div class="field">
-            <label for="justification">Detailed Justification <span class="required">*</span></label>
-            <textarea id="justification" name="justification" rows="6" placeholder="Explain why this unspent budget needs to roll forward..." required></textarea>
-            <p class="error-text" id="justification-error"></p>
+            <label for="fiscalYearSelect">Fiscal Year <span class="required">*</span></label>
+            <select id="fiscalYearSelect" required>
+              <option value="">Select a fiscal year...</option>
+            </select>
+            <p class="error-text" id="fiscalYear-error"></p>
           </div>
 
           <label class="checkbox-field">
@@ -133,6 +120,47 @@
     </form>
 
   </main>
+
+  <!-- Template for a single "account to roll forward" line — cloned by
+       js/rollforward.js's addLine() each time the requester adds one.
+       Fields have no static id/for (the template is cloned N times);
+       js/rollforward.js assigns unique ids per clone. -->
+  <template id="rollforwardLineTemplate">
+    <div class="rollforward-line">
+      <div class="rollforward-line-header">
+        <span class="rollforward-line-title"></span>
+        <button type="button" class="remove-row-btn no-print" aria-label="Remove this rollforward request" title="Remove this rollforward request">&times;</button>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label class="line-account-label">Expense Account <span class="required">*</span></label>
+          <div class="combobox" data-combobox="account">
+            <input type="text" class="account-input" placeholder="Select a department first..." aria-label="Expense Account" disabled />
+            <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
+            <ul class="combobox-listbox" role="listbox" hidden></ul>
+          </div>
+          <p class="error-text account-error"></p>
+        </div>
+        <div class="field">
+          <label class="line-project-label">Project Number</label>
+          <input type="text" class="project-input" inputmode="numeric" maxlength="5" placeholder="Optional" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="line-amount-label">Amount Requested to Roll Forward <span class="required">*</span></label>
+        <input type="text" class="amount-input" inputmode="decimal" placeholder="0.00" />
+        <p class="error-text amount-error"></p>
+      </div>
+
+      <div class="field">
+        <label class="line-justification-label">Detailed Justification <span class="required">*</span></label>
+        <textarea class="justification-input" rows="4" placeholder="Explain why this unspent budget needs to roll forward..."></textarea>
+        <p class="error-text justification-error"></p>
+      </div>
+    </div>
+  </template>
 
   <!-- Submission confirmation pop-up — shown after a successful Submit
        (see js/rollforward.js's showSubmissionModal()). -->

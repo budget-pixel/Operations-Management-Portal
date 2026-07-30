@@ -24,7 +24,7 @@
  *   "Settings"                 Setting | Value  (see getSettings() below)
  *   "Budget Transfer Requests" one row per submitted Transfer request (see appendRequestRow())
  *   "Budget Transfer Lines"    one row per Transfer From/To line (see appendLineRows())
- *   "Rollforward Requests"     one row per submitted Rollforward request (see appendRollforwardRow())
+ *   "Rollforward Requests"     one row per account within a Rollforward request (see appendRollforwardRows())
  *
  * COA Expenses and COA Revenue don't carry a department *name* column, only
  * a code (Department Code / Org Code) — departmentName comes back blank for
@@ -287,9 +287,14 @@ function handleTransferSubmission(ss, requestData) {
 
 /**
  * Handles a Fiscal Year Rollforward Request submission — the second portal
- * workflow, added alongside Transfer without touching any of its code.
- * Only one row is written (no paired lines table like Transfer has), so
- * there's no orphaned-record risk requiring a rollback.
+ * workflow, added alongside Transfer without touching any of its code. A
+ * submission can carry one or more accounts (requestData.lines), each with
+ * its own Expense Account, Amount, and Justification, all sharing one
+ * Department/Requester/Fiscal Year. One row is written per line — like
+ * Transfer's Budget Transfer Lines, but sharing "Rollforward Requests"
+ * itself rather than a separate lines sheet, since every column there
+ * already varies per line (Expense Account, Project Number, Amount,
+ * Justification) except the columns that describe the whole request.
  *
  * Input: the spreadsheet, and the parsed request payload (see
  * js/rollforward.js's collectFormData()).
@@ -305,17 +310,28 @@ function handleRollforwardSubmission(ss, requestData) {
   var requestId = generateRequestId(ss, 'Rollforward Requests', 'RF-' + settings.FiscalYear + '-', 4, 1);
   var timestamp = new Date();
 
-  var pdfBlob = buildRollforwardPdf(requestData, requestId, timestamp);
+  var lines = Array.isArray(requestData.lines) ? requestData.lines : [];
+  var totalAmount = sumRollforwardLineAmounts(lines);
 
-  appendRollforwardRow(ss, {
+  var pdfBlob = buildRollforwardPdf(requestData, requestId, timestamp, lines, totalAmount);
+
+  appendRollforwardRows(ss, {
     requestId: requestId,
     timestamp: timestamp,
     requestData: requestData,
+    lines: lines,
   });
 
-  sendRollforwardNotification(settings, requestData, requestId, timestamp, pdfBlob);
+  sendRollforwardNotification(settings, requestData, requestId, timestamp, lines, totalAmount, pdfBlob);
 
   return { success: true, requestId: requestId };
+}
+
+function sumRollforwardLineAmounts(lines) {
+  return lines.reduce(function (sum, line) {
+    var amount = parseFloat(line && line.amount);
+    return sum + (isFinite(amount) ? amount : 0);
+  }, 0);
 }
 
 // ---------- Settings ----------
@@ -458,7 +474,10 @@ function isValidEmailFormat(value) {
 
 /**
  * Re-validates a Rollforward submission server-side — mirrors
- * validateSubmission()'s style/purpose for the Transfer workflow.
+ * validateSubmission()'s style/purpose for the Transfer workflow. A
+ * submission carries one or more lines (data.lines), each needing its own
+ * Expense Account, Amount, and Justification; Department/Requester/Fiscal
+ * Year/Certification apply to the whole submission.
  *
  * Input: the parsed request payload.
  * Output: an array of human-readable error strings (empty = valid).
@@ -474,15 +493,26 @@ function validateRollforwardSubmission(data) {
     errors.push('A valid Requester Email is required.');
   }
   if (!data.department || !data.department.code) errors.push('Department is required.');
-  if (!data.account || !data.account.code) errors.push('Expense Account is required.');
-
-  var amount = parseFloat(data.amount);
-  if (!isFinite(amount) || amount <= 0) {
-    errors.push('A valid Amount greater than 0 is required.');
-  }
   if (!data.fiscalYear) errors.push('Fiscal Year is required.');
-  if (!data.justification) errors.push('Detailed Justification is required.');
   if (data.certified !== true) errors.push('Certification is required.');
+
+  var lines = Array.isArray(data.lines) ? data.lines : [];
+  if (lines.length === 0) {
+    errors.push('At least one account to roll forward is required.');
+  }
+  lines.forEach(function (line, index) {
+    var label = 'Rollforward Request #' + (index + 1) + ': ';
+    if (!line || !line.account || !line.account.code) {
+      errors.push(label + 'an Expense Account is required.');
+    }
+    var amount = parseFloat(line && line.amount);
+    if (!isFinite(amount) || amount <= 0) {
+      errors.push(label + 'a valid Amount greater than 0 is required.');
+    }
+    if (!line || !line.justification) {
+      errors.push(label + 'a Detailed Justification is required.');
+    }
+  });
 
   return errors;
 }
@@ -671,9 +701,12 @@ function appendLineRows(ss, requestId, lines) {
 }
 
 /**
- * Appends one row to "Rollforward Requests" — a single row per submission
- * (unlike Transfer, there's no separate lines sheet, so no pairing/
- * rollback logic is needed here).
+ * Appends one row per line to "Rollforward Requests" — a request with 3
+ * accounts writes 3 rows, all sharing the same Request ID/Timestamp/
+ * Requester/Department/Fiscal Year, exactly like Transfer's "Budget
+ * Transfer Lines" sheet shares one Request ID across multiple lines. No
+ * rollback/pairing logic is needed here (unlike Transfer's two-sheet
+ * write) since it's a single batched write to one sheet.
  * Columns, in order: Timestamp, Request ID, Requester Name, Requester
  * Email, Department Code, Department Name, Expense Account, Project
  * Number, Amount, Fiscal Year, Justification, Status, Submitted By.
@@ -681,34 +714,40 @@ function appendLineRows(ss, requestId, lines) {
  * "Submitted By" is populated with the same Requester Name — this form
  * has no separate submitter identity from the requester.
  */
-function appendRollforwardRow(ss, params) {
+function appendRollforwardRows(ss, params) {
   var sheet = ss.getSheetByName('Rollforward Requests');
   if (!sheet) {
     throw new Error('Sheet not found: "Rollforward Requests".');
   }
+  if (params.lines.length === 0) return;
 
   var data = params.requestData;
   var department = data.department || {};
-  var account = data.account || {};
-  // Reuses the same composite-number builder Transfer's lines use, so an
-  // Expense Account reads identically everywhere in the app.
-  var accountNumber = buildAccountNumber(department.code, account, data.projectCode);
 
-  sheet.appendRow([
-    params.timestamp,
-    params.requestId,
-    data.requesterName || '',
-    data.requesterEmail || '',
-    department.code || '',
-    department.name || '',
-    accountNumber + (account.name ? ' - ' + account.name : ''),
-    data.projectCode || '',
-    parseFloat(data.amount) || 0,
-    data.fiscalYear || '',
-    data.justification || '',
-    'Submitted',
-    data.requesterName || '',
-  ]);
+  var rows = params.lines.map(function (line) {
+    var account = line.account || {};
+    // Reuses the same composite-number builder Transfer's lines use, so an
+    // Expense Account reads identically everywhere in the app.
+    var accountNumber = buildAccountNumber(department.code, account, line.projectCode);
+
+    return [
+      params.timestamp,
+      params.requestId,
+      data.requesterName || '',
+      data.requesterEmail || '',
+      department.code || '',
+      department.name || '',
+      accountNumber + (account.name ? ' - ' + account.name : ''),
+      line.projectCode || '',
+      parseFloat(line.amount) || 0,
+      data.fiscalYear || '',
+      line.justification || '',
+      'Submitted',
+      data.requesterName || '',
+    ];
+  });
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
 // ---------- PDF ----------
@@ -807,7 +846,9 @@ function buildPdfCss() {
     + 'th{background:#f6f8f5;}'
     + 'td:last-child,th:last-child{text-align:right;white-space:nowrap;}'
     + '.total{text-align:right;font-weight:bold;margin-top:4px;font-size:10px;}'
-    + '.justification{margin-top:12px;white-space:pre-wrap;}';
+    + '.justification{margin-top:6px;white-space:pre-wrap;}'
+    + '.rf-line{border:1px solid #d6dbdc;border-radius:6px;padding:10px 12px;margin-top:10px;}'
+    + '.rf-line h2{margin-top:0;}';
 }
 
 /**
@@ -816,23 +857,38 @@ function buildPdfCss() {
  * never written to Drive, that exists only for the lifetime of this
  * request.
  */
-function buildRollforwardPdf(data, requestId, timestamp) {
-  var html = buildRollforwardHtml(data, requestId, timestamp);
+function buildRollforwardPdf(data, requestId, timestamp, lines, totalAmount) {
+  var html = buildRollforwardHtml(data, requestId, timestamp, lines, totalAmount);
   var htmlBlob = Utilities.newBlob(html, 'text/html', 'rollforward.html');
   var pdfBlob = htmlBlob.getAs('application/pdf');
   pdfBlob.setName('Rollforward-Request-' + requestId + '.pdf');
   return pdfBlob;
 }
 
-// A single-column summary block plus a Justification paragraph — simpler
-// than Transfer's dual Transfer From/To tables since a rollforward moves
-// one amount from one account into next year's budget.
-function buildRollforwardHtml(data, requestId, timestamp) {
+// A shared header block (requester/department/fiscal year) followed by one
+// bordered block per line — each with its own Expense Account, Amount, and
+// Justification — plus a grand total. Simpler than Transfer's side-by-side
+// Transfer From/To tables since Justification needs full-width room to
+// read, not a narrow table column.
+function buildRollforwardHtml(data, requestId, timestamp, lines, totalAmount) {
   var department = data.department || {};
-  var account = data.account || {};
-  var accountNumber = buildAccountNumber(department.code, account, data.projectCode);
-  var amount = parseFloat(data.amount) || 0;
   var css = buildPdfCss();
+
+  var linesHtml = lines.map(function (line, index) {
+    var account = line.account || {};
+    var accountNumber = buildAccountNumber(department.code, account, line.projectCode);
+    var amount = parseFloat(line.amount) || 0;
+
+    return '<div class="rf-line">'
+      + '<h2>Rollforward Request #' + (index + 1) + '</h2>'
+      + '<div class="meta"><b>Expense Account:</b> ' + escapeHtml(accountNumber)
+        + (account.name ? ' - ' + escapeHtml(account.name) : '') + '</div>'
+      + (line.projectCode ? '<div class="meta"><b>Project Number:</b> ' + escapeHtml(line.projectCode) + '</div>' : '')
+      + '<div class="meta"><b>Amount:</b> ' + formatCurrency(amount) + '</div>'
+      + '<div class="meta"><b>Justification:</b></div>'
+      + '<div class="justification">' + escapeHtml(line.justification || '') + '</div>'
+      + '</div>';
+  }).join('');
 
   return '<html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>'
     + '<h1>Fiscal Year Rollforward Request</h1>'
@@ -841,13 +897,9 @@ function buildRollforwardHtml(data, requestId, timestamp) {
     + '<div class="meta"><b>Requester Name:</b> ' + escapeHtml(data.requesterName || '')
       + '&nbsp;&nbsp;&nbsp;<b>Requester Email:</b> ' + escapeHtml(data.requesterEmail || '') + '</div>'
     + '<div class="meta"><b>Department:</b> ' + escapeHtml(formatDepartmentForDisplay(department)) + '</div>'
-    + '<div class="meta"><b>Expense Account:</b> ' + escapeHtml(accountNumber)
-      + (account.name ? ' - ' + escapeHtml(account.name) : '') + '</div>'
-    + (data.projectCode ? '<div class="meta"><b>Project Number:</b> ' + escapeHtml(data.projectCode) + '</div>' : '')
     + '<div class="meta"><b>Fiscal Year:</b> ' + escapeHtml(data.fiscalYear || '') + '</div>'
-    + '<div class="meta"><b>Amount Requested to Roll Forward:</b> ' + formatCurrency(amount) + '</div>'
-    + '<div class="meta"><b>Justification:</b></div>'
-    + '<div class="justification">' + escapeHtml(data.justification || '') + '</div>'
+    + linesHtml
+    + '<div class="total">Total Amount Requested to Roll Forward: ' + formatCurrency(totalAmount) + '</div>'
     + '</body></html>';
 }
 
@@ -887,23 +939,25 @@ function sendCountyNotification(settings, data, requestId, timestamp, totalAmoun
  * Emails the submitted Rollforward request's PDF to every address in
  * Settings!NotificationEmails — mirrors sendCountyNotification()'s shape.
  * Only the county notification sends; the requester is not emailed,
- * matching how Transfer submissions currently work.
+ * matching how Transfer submissions currently work. The email body
+ * summarizes the request (account count, total); per-account amounts and
+ * justifications are in the attached PDF.
  */
-function sendRollforwardNotification(settings, data, requestId, timestamp, pdfBlob) {
+function sendRollforwardNotification(settings, data, requestId, timestamp, lines, totalAmount, pdfBlob) {
   if (settings.NotificationEmails.length === 0) return;
 
   var department = data.department || {};
-  var amount = parseFloat(data.amount) || 0;
 
   var body = 'A Fiscal Year Rollforward Request has been submitted.\n\n'
     + 'Request ID:\n' + requestId + '\n\n'
     + 'Department:\n' + (department.name || '—') + '\n\n'
-    + 'Amount Requested to Roll Forward:\n' + formatCurrency(amount) + '\n\n'
+    + 'Number of Accounts:\n' + lines.length + '\n\n'
+    + 'Total Amount Requested to Roll Forward:\n' + formatCurrency(totalAmount) + '\n\n'
     + 'Fiscal Year:\n' + (data.fiscalYear || '') + '\n\n'
     + 'Requester:\n' + (data.requesterName || '') + '\n\n'
     + 'Requester Email:\n' + (data.requesterEmail || '') + '\n\n'
     + 'Submission Date:\n' + formatTimestampForEmail(timestamp) + '\n\n'
-    + 'The completed Rollforward Request is attached.';
+    + 'See the attached PDF for the account-by-account amounts and justifications.';
 
   MailApp.sendEmail({
     to: settings.NotificationEmails.join(','),

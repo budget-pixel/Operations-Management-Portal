@@ -152,13 +152,19 @@ Clicking **Submit Rollforward Request** on `rollforward.html` sends the
 completed form to the exact same Apps Script deployment — no separate URL,
 no separate deployment. The script tells the two request types apart by a
 `requestType` field the client sends automatically; you don't need to
-configure anything for this. It generates a PDF, records one row in a new
-sheet, and emails the PDF to Budget Office staff (the requester is **not**
-emailed, matching Budget Transfer's current behavior). Reuses the same
-`Settings` sheet from §6 — no new settings needed.
+configure anything for this. A single request can cover one or more
+accounts (the requester adds more with **+ Add Another Rollforward
+Request** on the page — one Department, but each account has its own
+Expense Account, Amount, and Justification). The script generates one PDF
+covering every account on the request, records one row **per account** in
+a new sheet (all sharing the same Request ID), and emails the PDF to
+Budget Office staff (the requester is **not** emailed, matching Budget
+Transfer's current behavior). Reuses the same `Settings` sheet from §6 —
+no new settings needed.
 
-**Rollforward Requests** — one row per submitted request. Create the sheet
-with this exact header row, in order:
+**Rollforward Requests** — one row per account within a submitted request
+(a request with 3 accounts writes 3 rows, all sharing one Request ID).
+Create the sheet with this exact header row, in order:
 
 `Timestamp | Request ID | Requester Name | Requester Email | Department Code | Department Name | Expense Account | Project Number | Amount | Fiscal Year | Justification | Status | Submitted By`
 

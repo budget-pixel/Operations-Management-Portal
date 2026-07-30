@@ -1,11 +1,15 @@
 /* =============================================================
    rollforward.js
-   Page controller for rollforward.html — DOM wiring, the single
-   department/account combobox pair, validation, and submission.
-   Mirrors app.js's role for transfer.html, but much simpler (one
-   department, one expense account, one amount) so it isn't forced
-   to share app.js's dual-department/multi-row machinery. Reuses
-   the same underlying library modules (Calculations, GoogleSheets,
+   Page controller for rollforward.html — DOM wiring, the shared
+   department combobox, a repeatable list of "account to roll
+   forward" line items (each with its own Expense Account
+   combobox, Amount, and Justification), validation, and
+   submission. Mirrors app.js's role for transfer.html: the
+   repeatable-row pattern (template clone / add / remove / at
+   least one row) is the same idea as Transfer's Transfer From/To
+   tables, just for a card-shaped line instead of a table row,
+   since Justification needs a full-width textarea. Reuses the
+   same underlying library modules (Calculations, GoogleSheets,
    Departments, Expenses, AccountSearch, Validation, Submission)
    completely unchanged — no department search or account filtering
    logic is duplicated here.
@@ -20,7 +24,7 @@
 
   // Add future years here — everything else (the <select>'s options,
   // validation) picks this up automatically.
-  var FISCAL_YEARS = ['2025-2026', '2026-2027', '2027-2028'];
+  var FISCAL_YEARS = ['2026-2027', '2027-2028'];
 
   // -----------------------------------------------------------
   // Element references
@@ -39,27 +43,19 @@
   var departmentListbox = document.getElementById('departmentInput-listbox');
   var departmentErrorEl = document.getElementById('department-error');
 
-  var accountInput = document.getElementById('accountInput');
-  var accountClearBtn = accountInput.parentElement.querySelector('.combobox-clear');
-  var accountListbox = document.getElementById('accountInput-listbox');
-  var accountErrorEl = document.getElementById('account-error');
-  var projectInput = document.getElementById('projectInput');
-
-  var amountInput = document.getElementById('amountInput');
-  var amountErrorEl = document.getElementById('amount-error');
+  var linesContainer = document.getElementById('rollforwardLines');
+  var lineTemplate = document.getElementById('rollforwardLineTemplate');
+  var addLineBtn = document.getElementById('addLineBtn');
+  var linesTotalEl = document.getElementById('linesTotal');
 
   var fiscalYearSelect = document.getElementById('fiscalYearSelect');
   var fiscalYearErrorEl = document.getElementById('fiscalYear-error');
-
-  var justificationInput = document.getElementById('justification');
-  var justificationErrorEl = document.getElementById('justification-error');
 
   var certificationInput = document.getElementById('certification');
   var certificationErrorEl = document.getElementById('certification-error');
 
   var requiredFields = [
     { input: document.getElementById('requesterName'), error: document.getElementById('requesterName-error'), message: 'Requester Name is required.' },
-    { input: justificationInput, error: justificationErrorEl, message: 'Detailed Justification is required.' },
   ];
   var requesterEmailInput = document.getElementById('requesterEmail');
   var requesterEmailErrorEl = document.getElementById('requesterEmail-error');
@@ -80,11 +76,11 @@
   });
 
   // -----------------------------------------------------------
-  // Department + Expense Account comboboxes
+  // Department (shared by every line below)
   // -----------------------------------------------------------
 
   var selectedDepartment = null;
-  var selectedAccount = null;
+  var lines = []; // one entry per rendered "account to roll forward" block
 
   // Prefers the normalized matchCode (see Code.gs's normalizeDeptCode) for
   // account filtering, matching how transfer.html's app.js does it.
@@ -105,10 +101,10 @@
     return buildAccountNumber(account, projCode) + ' - ' + account.name;
   }
 
-  function refreshAccountLabel() {
-    if (!selectedAccount) return;
-    var projCode = projectInput.value.trim();
-    accountController.setSelection({ label: buildAccountLabel(selectedAccount, projCode) });
+  function refreshLineAccountLabel(line) {
+    if (!line.selectedAccount) return;
+    var projCode = line.projectInput.value.trim();
+    line.accountController.setSelection({ label: buildAccountLabel(line.selectedAccount, projCode) });
   }
 
   var departmentController = AccountSearch.createCombobox({
@@ -125,57 +121,182 @@
     onSelect: function (dept) {
       departmentErrorEl.textContent = '';
       selectedDepartment = dept;
-      selectedAccount = null;
-      projectInput.value = '';
-      accountController.setDisabled(!dept);
-      accountInput.placeholder = dept ? 'Search account by number or name...' : 'Select a department first...';
-    },
-  });
-
-  var accountController = AccountSearch.createCombobox({
-    inputEl: accountInput,
-    clearBtnEl: accountClearBtn,
-    listboxEl: accountListbox,
-    wrapperEl: accountInput.closest('.combobox'),
-    emptyMessage: 'No matching accounts.',
-    getResults: function (query) {
-      var deptCode = getDeptMatchCode(selectedDepartment);
-      if (!deptCode) return [];
-      return Expenses.search(query, deptCode).map(function (acct) {
-        var projCode = acct.projectCode || projectInput.value.trim();
-        return {
-          id: acct.code,
-          label: buildAccountLabel(acct, projCode),
-          data: acct,
-        };
+      // Every line's account is scoped to the department — a department
+      // change invalidates whatever was selected on each one, exactly
+      // like changing department clears account selections on Transfer.
+      lines.forEach(function (line) {
+        line.selectedAccount = null;
+        line.accountController.clearSelection(false);
+        line.accountController.setDisabled(!dept);
+        line.accountInput.placeholder = dept ? 'Search account by number or name...' : 'Select a department first...';
       });
+      updateLinesTotal();
     },
-    onSelect: function (account) {
-      selectedAccount = account;
-      accountErrorEl.textContent = '';
-      accountInput.removeAttribute('aria-invalid');
-
-      // If this account already has a project number in the sheet, fill
-      // it in automatically instead of making the requester retype a
-      // number the chart of accounts already determines — same behavior
-      // as the Budget Transfer page.
-      if (account && account.projectCode) {
-        projectInput.value = account.projectCode;
-        projectInput.removeAttribute('aria-invalid');
-        refreshAccountLabel();
-      }
-    },
-  });
-  accountController.setDisabled(true);
-
-  projectInput.addEventListener('input', function () {
-    accountErrorEl.textContent = '';
-    projectInput.removeAttribute('aria-invalid');
-    refreshAccountLabel();
   });
 
   // -----------------------------------------------------------
-  // Live error clearing
+  // Repeatable "account to roll forward" line items
+  // -----------------------------------------------------------
+
+  function createLine() {
+    var fragment = lineTemplate.content.cloneNode(true);
+    var lineEl = fragment.querySelector('.rollforward-line');
+
+    var accountInput = lineEl.querySelector('.account-input');
+    var accountClearBtn = lineEl.querySelector('.combobox-clear');
+    var accountListbox = lineEl.querySelector('.combobox-listbox');
+    var accountErrorEl = lineEl.querySelector('.account-error');
+    var projectInput = lineEl.querySelector('.project-input');
+    var amountInput = lineEl.querySelector('.amount-input');
+    var amountErrorEl = lineEl.querySelector('.amount-error');
+    var justificationInput = lineEl.querySelector('.justification-input');
+    var justificationErrorEl = lineEl.querySelector('.justification-error');
+    var removeBtn = lineEl.querySelector('.remove-row-btn');
+    var titleEl = lineEl.querySelector('.rollforward-line-title');
+
+    var uid = 'rfline-' + Math.random().toString(36).slice(2);
+    accountInput.id = uid + '-account';
+    accountListbox.id = uid + '-account-listbox';
+    lineEl.querySelector('.line-account-label').setAttribute('for', accountInput.id);
+    projectInput.id = uid + '-project';
+    lineEl.querySelector('.line-project-label').setAttribute('for', projectInput.id);
+    amountInput.id = uid + '-amount';
+    lineEl.querySelector('.line-amount-label').setAttribute('for', amountInput.id);
+    justificationInput.id = uid + '-justification';
+    lineEl.querySelector('.line-justification-label').setAttribute('for', justificationInput.id);
+
+    var line = {
+      el: lineEl,
+      accountInput: accountInput,
+      accountErrorEl: accountErrorEl,
+      projectInput: projectInput,
+      amountInput: amountInput,
+      amountErrorEl: amountErrorEl,
+      justificationInput: justificationInput,
+      justificationErrorEl: justificationErrorEl,
+      removeBtn: removeBtn,
+      titleEl: titleEl,
+      selectedAccount: null,
+    };
+
+    line.accountController = AccountSearch.createCombobox({
+      inputEl: accountInput,
+      clearBtnEl: accountClearBtn,
+      listboxEl: accountListbox,
+      wrapperEl: accountInput.closest('.combobox'),
+      emptyMessage: 'No matching accounts.',
+      getResults: function (query) {
+        var deptCode = getDeptMatchCode(selectedDepartment);
+        if (!deptCode) return [];
+        return Expenses.search(query, deptCode).map(function (acct) {
+          var projCode = acct.projectCode || projectInput.value.trim();
+          return {
+            id: acct.code,
+            label: buildAccountLabel(acct, projCode),
+            data: acct,
+          };
+        });
+      },
+      onSelect: function (account) {
+        line.selectedAccount = account;
+        accountErrorEl.textContent = '';
+        accountInput.removeAttribute('aria-invalid');
+
+        // If this account already has a project number in the sheet, fill
+        // it in automatically — same behavior as the Budget Transfer page.
+        if (account && account.projectCode) {
+          projectInput.value = account.projectCode;
+          projectInput.removeAttribute('aria-invalid');
+          refreshLineAccountLabel(line);
+        }
+      },
+    });
+    line.accountController.setDisabled(!selectedDepartment);
+    accountInput.placeholder = selectedDepartment ? 'Search account by number or name...' : 'Select a department first...';
+
+    projectInput.addEventListener('input', function () {
+      accountErrorEl.textContent = '';
+      projectInput.removeAttribute('aria-invalid');
+      refreshLineAccountLabel(line);
+    });
+
+    amountInput.addEventListener('input', function () {
+      Validation.setFieldError(amountInput, amountErrorEl, '');
+      updateLinesTotal();
+    });
+
+    amountInput.addEventListener('blur', function () {
+      if (Calculations.isValidAmount(amountInput.value)) {
+        amountInput.value = Calculations.parseAmount(amountInput.value).toFixed(2);
+        updateLinesTotal();
+      }
+    });
+
+    justificationInput.addEventListener('input', function () {
+      Validation.setFieldError(justificationInput, justificationErrorEl, '');
+    });
+
+    removeBtn.addEventListener('click', function () {
+      removeLine(line);
+    });
+
+    return line;
+  }
+
+  function addLine() {
+    var line = createLine();
+    linesContainer.appendChild(line.el);
+    lines.push(line);
+    renumberLines();
+    updateRemoveButtonsState();
+    updateLinesTotal();
+  }
+
+  // Keeps at least one line so the section never collapses to nothing.
+  function removeLine(line) {
+    if (lines.length <= 1) return;
+    var index = lines.indexOf(line);
+    if (index === -1) return;
+    lines.splice(index, 1);
+    line.el.remove();
+    renumberLines();
+    updateRemoveButtonsState();
+    updateLinesTotal();
+  }
+
+  function renumberLines() {
+    lines.forEach(function (line, index) {
+      line.titleEl.textContent = 'Rollforward Request #' + (index + 1);
+    });
+  }
+
+  function updateRemoveButtonsState() {
+    var onlyOneLine = lines.length <= 1;
+    lines.forEach(function (line) {
+      line.removeBtn.disabled = onlyOneLine;
+    });
+  }
+
+  function getLinesTotal() {
+    return Calculations.sumAmounts(lines.map(function (line) { return line.amountInput.value; }));
+  }
+
+  function updateLinesTotal() {
+    linesTotalEl.textContent = Calculations.formatCurrency(getLinesTotal());
+  }
+
+  // Wipes and rebuilds the list down to a single empty line — used by
+  // Clear Form, mirroring Transfer's resetTable().
+  function resetLines() {
+    linesContainer.innerHTML = '';
+    lines = [];
+    addLine();
+  }
+
+  addLineBtn.addEventListener('click', addLine);
+
+  // -----------------------------------------------------------
+  // Live error clearing (fields outside the repeatable lines)
   // -----------------------------------------------------------
 
   requiredFields.forEach(function (field) {
@@ -186,16 +307,6 @@
 
   requesterEmailInput.addEventListener('input', function () {
     Validation.setFieldError(requesterEmailInput, requesterEmailErrorEl, '');
-  });
-
-  amountInput.addEventListener('input', function () {
-    Validation.setFieldError(amountInput, amountErrorEl, '');
-  });
-
-  amountInput.addEventListener('blur', function () {
-    if (Calculations.isValidAmount(amountInput.value)) {
-      amountInput.value = Calculations.parseAmount(amountInput.value).toFixed(2);
-    }
   });
 
   fiscalYearSelect.addEventListener('change', function () {
@@ -238,21 +349,34 @@
       firstInvalidEl = firstInvalidEl || departmentInput;
     }
 
-    if (!selectedAccount) {
-      accountErrorEl.textContent = 'Select an expense account.';
-      isValid = false;
-      firstInvalidEl = firstInvalidEl || accountInput;
-    } else {
-      accountErrorEl.textContent = '';
-    }
+    // Every rendered line must be complete — unlike Transfer's fixed rows,
+    // there's no "extra unused row" concept here: each line only exists
+    // because the requester explicitly added it.
+    lines.forEach(function (line) {
+      if (!line.selectedAccount) {
+        line.accountErrorEl.textContent = 'Select an expense account.';
+        isValid = false;
+        firstInvalidEl = firstInvalidEl || line.accountInput;
+      } else {
+        line.accountErrorEl.textContent = '';
+      }
 
-    if (!Calculations.isValidAmount(amountInput.value)) {
-      Validation.setFieldError(amountInput, amountErrorEl, 'Enter a valid amount greater than 0.');
-      isValid = false;
-      firstInvalidEl = firstInvalidEl || amountInput;
-    } else {
-      Validation.setFieldError(amountInput, amountErrorEl, '');
-    }
+      if (!Calculations.isValidAmount(line.amountInput.value)) {
+        Validation.setFieldError(line.amountInput, line.amountErrorEl, 'Enter a valid amount greater than 0.');
+        isValid = false;
+        firstInvalidEl = firstInvalidEl || line.amountInput;
+      } else {
+        Validation.setFieldError(line.amountInput, line.amountErrorEl, '');
+      }
+
+      var justificationOk = Validation.validateRequiredField(
+        line.justificationInput, line.justificationErrorEl, 'Detailed Justification is required.'
+      );
+      if (!justificationOk) {
+        isValid = false;
+        firstInvalidEl = firstInvalidEl || line.justificationInput;
+      }
+    });
 
     if (!fiscalYearSelect.value) {
       fiscalYearSelect.setAttribute('aria-invalid', 'true');
@@ -286,12 +410,16 @@
       requesterName: document.getElementById('requesterName').value.trim(),
       requesterEmail: requesterEmailInput.value.trim(),
       department: selectedDepartment,
-      account: selectedAccount,
-      projectCode: projectInput.value.trim(),
-      amount: amountInput.value,
       fiscalYear: fiscalYearSelect.value,
-      justification: justificationInput.value.trim(),
       certified: certificationInput.checked,
+      lines: lines.map(function (line) {
+        return {
+          account: line.selectedAccount,
+          projectCode: line.projectInput.value.trim(),
+          amount: line.amountInput.value,
+          justification: line.justificationInput.value.trim(),
+        };
+      }),
     };
   }
 
@@ -439,18 +567,13 @@
     form.reset();
     requiredFields.forEach(function (field) { Validation.setFieldError(field.input, field.error, ''); });
     Validation.setFieldError(requesterEmailInput, requesterEmailErrorEl, '');
-    Validation.setFieldError(amountInput, amountErrorEl, '');
     fiscalYearErrorEl.textContent = '';
     fiscalYearSelect.removeAttribute('aria-invalid');
     certificationErrorEl.textContent = '';
     departmentController.clearSelection(false);
-    accountController.clearSelection(false);
-    accountController.setDisabled(true);
-    accountInput.placeholder = 'Select a department first...';
     selectedDepartment = null;
-    selectedAccount = null;
     departmentErrorEl.textContent = '';
-    accountErrorEl.textContent = '';
+    resetLines();
     setSubmitting(false);
     hideStatus();
   });
@@ -459,6 +582,7 @@
   // Init
   // -----------------------------------------------------------
 
+  addLine();
   loadChartOfAccounts();
 })(
   window.BudgetApp.Calculations,
