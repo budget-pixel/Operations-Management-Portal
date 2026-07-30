@@ -166,12 +166,23 @@ no new settings needed.
 (a request with 3 accounts writes 3 rows, all sharing one Request ID).
 Create the sheet with this exact header row, in order:
 
-`Timestamp | Request ID | Requester Name | Requester Email | Department Code | Department Name | Expense Account | Project Number | Amount | Fiscal Year | Justification | Status | Submitted By`
+`Timestamp | Request ID | Requester Name | Requester Email | Department Code | Department Name | Expense Account | Project Number | Contract or PO Number | Amount | Fiscal Year | Justification | Status | Submitted By`
 
 Note the column order here is different from Budget Transfer Requests
 (`Timestamp` comes before `Request ID`) — this matches how the sheet was
 specified, and `Code.gs`'s `generateRequestId()` already knows to look in
 the right column for each sheet.
+
+**Important — column order is positional, not name-matched.** `Code.gs`
+always writes values into columns A–N in the exact order listed above; it
+never looks at your header text to figure out where a value belongs. If
+you already have a `Rollforward Requests` sheet from before Contract or PO
+Number existed, **insert a new column between Project Number and Amount**
+(don't just append "Contract or PO Number" at the end) so the physical
+column order still matches the list above — appending it at the end would
+silently shift every column after Project Number one position out of
+alignment with its header, the same kind of mismatch as a swapped/misplaced
+header.
 
 ## Troubleshooting
 

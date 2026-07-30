@@ -141,7 +141,7 @@ window.BudgetApp.Validation = (function (Calculations) {
           rowIsComplete = true;
         } else {
           amountInput.setAttribute('aria-invalid', 'true');
-          message = 'Enter a valid amount greater than 0.';
+          message = 'Enter a valid amount between 0.01 and ' + Calculations.formatCurrency(Calculations.MAX_AMOUNT) + '.';
         }
       }
 

@@ -533,13 +533,11 @@
       firstInvalidEl = firstInvalidEl || requestorEmailInput;
     }
 
-    var amendmentOk = Validation.validateAmendmentType(amendmentRadios, amendmentErrorEl);
-    if (!amendmentOk) {
-      isValid = false;
-      firstInvalidEl = firstInvalidEl || amendmentRadios[0];
-    }
-
-    if (amendmentOk && departmentMode === AmendmentRules.SINGLE) {
+    // Amendment type is no longer a required field — Intradepartmental is
+    // currently the only option and comes pre-checked, so there's nothing
+    // for the user to get wrong here. departmentMode still resolves off
+    // whichever radio is checked, so the rest of this logic is unchanged.
+    if (departmentMode === AmendmentRules.SINGLE) {
       var singleOk = Validation.validateDepartmentSelection(
         departmentSelections.single, departmentControllers.single.errorEl, 'Select a department.'
       );
@@ -547,7 +545,7 @@
         isValid = false;
         firstInvalidEl = firstInvalidEl || departmentControllers.single.inputEl;
       }
-    } else if (amendmentOk && departmentMode === AmendmentRules.DUAL) {
+    } else if (departmentMode === AmendmentRules.DUAL) {
       var fromOk = Validation.validateDepartmentSelection(
         departmentSelections.from, departmentControllers.from.errorEl, 'Select the Transfer From department.'
       );
@@ -705,6 +703,15 @@
   function setSubmitting(isSubmitting) {
     submitBtn.disabled = isSubmitting;
     submitBtn.textContent = isSubmitting ? 'Submitting…' : submitBtnDefaultLabel;
+  }
+
+  // Called instead of setSubmitting(false) once a submission succeeds —
+  // the button stays disabled (same reasoning as above), but its label
+  // needs to move on from "Submitting…", which would otherwise sit there
+  // indefinitely since success never calls setSubmitting(false).
+  function markSubmitted() {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitted';
   }
 
   // Pop-up shown once the server accepts a submission — replaces the old
@@ -945,6 +952,7 @@
     Submission.submit(requestData)
       .then(function (result) {
         hideStatus();
+        markSubmitted();
         showSubmissionModal(result.requestId);
         // The request is now officially submitted — an old "restore
         // draft?" prompt on a future visit would just be stale.

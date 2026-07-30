@@ -39,16 +39,21 @@ confirms each submission to the requester on-screen.
 - A pop-up confirms each successful submission, naming its Request ID
 
 **Budget Transfer / Amendment Request**
-- Date picker, Description (required), Prepared By, and Title fields
-- Amendment type selection (Fl. St. 129.06(2)(a)–(f)), matching the original form
-- **Searchable department dropdown(s)** — one for Intradepartmental Amendment
-  (governs both Transfer From and Transfer To); two independent ones (Transfer
-  From Department / Transfer To Department) for every other amendment type
+- Date picker, Description (required, 250-character limit), Prepared By and
+  Title fields (50-character limit each)
+- **Intradepartmental Amendment** (Fl. St. 129.06(2)(a)) is currently the
+  only request type — pre-selected and not a required field, since there's
+  nothing else to choose. The dual-department machinery for other amendment
+  types (Interdepartmental, Reserve, etc.) still exists under the hood and
+  can be re-enabled later without code changes
+- **Searchable department dropdown** governing both Transfer From and
+  Transfer To (50-character search limit)
 - **Searchable account dropdowns** for Transfer From / Transfer To, combining
   Expense object codes and Revenue codes (grouped and clearly labeled),
   scoped to whichever department governs that row — search by code or name
 - Add/remove rows, with live, auto-formatted totals, and a check that
-  Transfer From and Transfer To totals match before submitting
+  Transfer From and Transfer To totals match before submitting; each amount
+  must be between $0.01 and $99,999,999.99
 - **Save Draft** / **Automatic draft restore** — stores the current form
   state in the browser's Local Storage and offers to restore it later
 - **Print Form** — a print-friendly layout with buttons and banners hidden
@@ -56,10 +61,15 @@ confirms each submission to the requester on-screen.
   full page reload, for after you edit the spreadsheet
 
 **Fiscal Year Rollforward Request**
-- Requester Name / Email, a single department + expense account pair (same
-  searchable comboboxes as Transfer, project-code search/autofill included),
-  Amount, a Fiscal Year dropdown (easy to extend with future years), a
-  Detailed Justification textarea, and a required certification checkbox
+- Requester Name / Email (50-character limit) and a single department
+  govern the whole request; **+ Add Another Rollforward Request** adds as
+  many "accounts to roll forward" line items as needed, each with its own
+  searchable Expense Account (same combobox as Transfer, project-code
+  search/autofill included), an optional Project Number and Contract or PO
+  Number, an Amount ($0.01–$99,999,999.99), and its own Detailed
+  Justification (250-character limit)
+- A Fiscal Year dropdown (easy to extend with future years) and a required
+  certification checkbox apply to the whole request
 - Request IDs are numbered separately from Budget Transfer's (`RF-2026-0001`)
   and never interfere with Budget Transfer's own numbering
 

@@ -417,6 +417,23 @@ function generateRequestId(ss, sheetName, idPrefix, padWidth, idColumnIndex) {
 
 // ---------- Validation (server-side defense in depth) ----------
 
+// Upper bound for any dollar amount, mirroring js/calculations.js's
+// Calculations.MAX_AMOUNT — both client and server enforce the same
+// ceiling. Field length caps below mirror the maxlength attributes in
+// transfer.html/rollforward.html; re-checked here since a request could
+// reach doPost without going through the browser's own maxlength
+// enforcement.
+var MAX_AMOUNT = 99999999.99;
+
+function isValidAmountValue(value) {
+  var amount = parseFloat(value);
+  return isFinite(amount) && amount > 0 && amount <= MAX_AMOUNT;
+}
+
+function isValidLength(value, maxLength) {
+  return String(value || '').length <= maxLength;
+}
+
 /**
  * Re-validates the submission server-side — the client already validates,
  * but a request could reach doPost some other way, and this is the last
@@ -432,11 +449,25 @@ function validateSubmission(data) {
     return ['Malformed request payload.'];
   }
   if (!data.date) errors.push('Date is required.');
-  if (!data.description) errors.push('Description is required.');
-  if (!data.preparedBy) errors.push('Prepared By is required.');
-  if (!data.title) errors.push('Title is required.');
+  if (!data.description) {
+    errors.push('Description is required.');
+  } else if (!isValidLength(data.description, 250)) {
+    errors.push('Description must be 250 characters or fewer.');
+  }
+  if (!data.preparedBy) {
+    errors.push('Prepared By is required.');
+  } else if (!isValidLength(data.preparedBy, 50)) {
+    errors.push('Prepared By must be 50 characters or fewer.');
+  }
+  if (!data.title) {
+    errors.push('Title is required.');
+  } else if (!isValidLength(data.title, 50)) {
+    errors.push('Title must be 50 characters or fewer.');
+  }
   if (!data.requestorEmail || !isValidEmailFormat(data.requestorEmail)) {
     errors.push('A valid Requestor Email Address is required.');
+  } else if (!isValidLength(data.requestorEmail, 50)) {
+    errors.push('Requestor Email Address must be 50 characters or fewer.');
   }
   if (!data.amendmentType || !AMENDMENT_TYPE_LABELS[data.amendmentType]) {
     errors.push('A valid amendment type is required.');
@@ -447,6 +478,13 @@ function validateSubmission(data) {
 
   if (fromLines.length === 0) errors.push('At least one Transfer From account is required.');
   if (toLines.length === 0) errors.push('At least one Transfer To account is required.');
+
+  var hasInvalidAmount = fromLines.concat(toLines).some(function (line) {
+    return !isValidAmountValue(line.amount);
+  });
+  if (hasInvalidAmount) {
+    errors.push('Each transfer amount must be between 0.01 and ' + formatCurrency(MAX_AMOUNT) + '.');
+  }
 
   var fromTotal = sumAmounts(fromLines);
   var toTotal = sumAmounts(toLines);
@@ -488,9 +526,15 @@ function validateRollforwardSubmission(data) {
   if (!data || typeof data !== 'object') {
     return ['Malformed request payload.'];
   }
-  if (!data.requesterName) errors.push('Requester Name is required.');
+  if (!data.requesterName) {
+    errors.push('Requester Name is required.');
+  } else if (!isValidLength(data.requesterName, 50)) {
+    errors.push('Requester Name must be 50 characters or fewer.');
+  }
   if (!data.requesterEmail || !isValidEmailFormat(data.requesterEmail)) {
     errors.push('A valid Requester Email is required.');
+  } else if (!isValidLength(data.requesterEmail, 50)) {
+    errors.push('Requester Email must be 50 characters or fewer.');
   }
   if (!data.department || !data.department.code) errors.push('Department is required.');
   if (!data.fiscalYear) errors.push('Fiscal Year is required.');
@@ -505,12 +549,17 @@ function validateRollforwardSubmission(data) {
     if (!line || !line.account || !line.account.code) {
       errors.push(label + 'an Expense Account is required.');
     }
-    var amount = parseFloat(line && line.amount);
-    if (!isFinite(amount) || amount <= 0) {
-      errors.push(label + 'a valid Amount greater than 0 is required.');
+    if (!line || !isValidAmountValue(line.amount)) {
+      errors.push(label + 'a valid Amount between 0.01 and ' + formatCurrency(MAX_AMOUNT) + ' is required.');
     }
     if (!line || !line.justification) {
       errors.push(label + 'a Detailed Justification is required.');
+    } else if (!isValidLength(line.justification, 250)) {
+      errors.push(label + 'Detailed Justification must be 250 characters or fewer.');
+    }
+    // Contract or PO Number is optional (alphanumeric) — only its length is checked.
+    if (line && line.contractPoNumber && !isValidLength(line.contractPoNumber, 50)) {
+      errors.push(label + 'Contract or PO Number must be 50 characters or fewer.');
     }
   });
 
@@ -709,7 +758,8 @@ function appendLineRows(ss, requestId, lines) {
  * write) since it's a single batched write to one sheet.
  * Columns, in order: Timestamp, Request ID, Requester Name, Requester
  * Email, Department Code, Department Name, Expense Account, Project
- * Number, Amount, Fiscal Year, Justification, Status, Submitted By.
+ * Number, Contract or PO Number, Amount, Fiscal Year, Justification,
+ * Status, Submitted By.
  *
  * "Submitted By" is populated with the same Requester Name — this form
  * has no separate submitter identity from the requester.
@@ -739,6 +789,7 @@ function appendRollforwardRows(ss, params) {
       department.name || '',
       accountNumber + (account.name ? ' - ' + account.name : ''),
       line.projectCode || '',
+      line.contractPoNumber || '',
       parseFloat(line.amount) || 0,
       data.fiscalYear || '',
       line.justification || '',
@@ -884,6 +935,7 @@ function buildRollforwardHtml(data, requestId, timestamp, lines, totalAmount) {
       + '<div class="meta"><b>Expense Account:</b> ' + escapeHtml(accountNumber)
         + (account.name ? ' - ' + escapeHtml(account.name) : '') + '</div>'
       + (line.projectCode ? '<div class="meta"><b>Project Number:</b> ' + escapeHtml(line.projectCode) + '</div>' : '')
+      + (line.contractPoNumber ? '<div class="meta"><b>Contract or PO Number:</b> ' + escapeHtml(line.contractPoNumber) + '</div>' : '')
       + '<div class="meta"><b>Amount:</b> ' + formatCurrency(amount) + '</div>'
       + '<div class="meta"><b>Justification:</b></div>'
       + '<div class="justification">' + escapeHtml(line.justification || '') + '</div>'

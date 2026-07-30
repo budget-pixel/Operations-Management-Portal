@@ -58,81 +58,46 @@
 
           <div class="field">
             <label for="description">Information concerning the following budget amendment request <span class="required">*</span></label>
-            <textarea id="description" name="description" rows="4" placeholder="Describe the purpose of this budget amendment..." required></textarea>
+            <textarea id="description" name="description" rows="4" maxlength="250" placeholder="Describe the purpose of this budget amendment..." required></textarea>
             <p class="error-text" id="description-error"></p>
           </div>
 
           <div class="grid-2">
             <div class="field">
               <label for="preparedBy">Prepared By (BY) <span class="required">*</span></label>
-              <input type="text" id="preparedBy" name="preparedBy" required />
+              <input type="text" id="preparedBy" name="preparedBy" maxlength="50" required />
               <p class="error-text" id="preparedBy-error"></p>
             </div>
             <div class="field">
               <label for="title">Title <span class="required">*</span></label>
-              <input type="text" id="title" name="title" required />
+              <input type="text" id="title" name="title" maxlength="50" required />
               <p class="error-text" id="title-error"></p>
             </div>
           </div>
 
           <div class="field">
             <label for="requestorEmail">Requestor Email Address <span class="required">*</span></label>
-            <input type="email" id="requestorEmail" name="requestorEmail" placeholder="you@waltoncountyfl.gov" required />
+            <input type="email" id="requestorEmail" name="requestorEmail" placeholder="you@waltoncountyfl.gov" maxlength="50" required />
             <p class="error-text" id="requestorEmail-error"></p>
           </div>
         </div>
       </section>
 
-      <!-- Amendment type -->
+      <!-- Amendment type — Intradepartmental is currently the only
+           supported request type. Pre-checked and not validated as
+           required (see js/app.js's validateForm()) since there's nothing
+           else to choose; its department-mode wiring (js/amendmentRules.js,
+           'single' mode) is unchanged. -->
       <section class="card">
-        <h2 class="section-title">This Request Will Require A <span class="required">*</span></h2>
+        <h2 class="section-title">This Request Will Require A</h2>
         <div class="card-body">
-          <div class="radio-group" role="radiogroup" aria-required="true" aria-describedby="amendmentType-error">
+          <div class="radio-group" role="radiogroup" aria-describedby="amendmentType-error">
 
             <label class="radio-option">
-              <input type="radio" name="amendmentType" value="intradepartmental" required />
+              <input type="radio" name="amendmentType" value="intradepartmental" checked />
               <span>
                 <strong>Intradepartmental Amendment</strong> <span class="statute">(Fl. St. 129.06(2)(a))</span>
                 <small>Requires approval from County Administrator and Budget Officer.</small>
-              </span>
-            </label>
-
-            <label class="radio-option">
-              <input type="radio" name="amendmentType" value="interdepartmental" />
-              <span>
-                <strong>Interdepartmental Amendment</strong> <span class="statute">(Fl. St. 129.06(2)(b))</span>
-                <small>Requires motion from BCC.</small>
-              </span>
-            </label>
-
-            <label class="radio-option">
-              <input type="radio" name="amendmentType" value="reserve" />
-              <span>
-                <strong>Reserve for future construction and improvements</strong> <span class="statute">(Fl. St. 129.06(2)(c))</span>
-                <small>Requires Resolution by BCC.</small>
-              </span>
-            </label>
-
-            <label class="radio-option">
-              <input type="radio" name="amendmentType" value="unanticipatedRevenue" />
-              <span>
-                <strong>Unanticipated revenue</strong> <span class="statute">(Fl. St. 129.06(2)(d))</span>
-                <small>Requires Resolution by BCC.</small>
-              </span>
-            </label>
-
-            <label class="radio-option">
-              <input type="radio" name="amendmentType" value="increasedReceipts" />
-              <span>
-                <strong>Increased receipts for enterprise fund</strong> <span class="statute">(Fl. St. 129.06(2)(e))</span>
-                <small>Requires Resolution by BCC.</small>
-              </span>
-            </label>
-
-            <label class="radio-option">
-              <input type="radio" name="amendmentType" value="publicHearing" />
-              <span>
-                <strong>Requires Public Hearing</strong> <span class="statute">(Fl. St. 129.06(2)(f))</span>
               </span>
             </label>
 
@@ -301,7 +266,7 @@
       <td class="account-cell">
         <label class="sr-only">Search account by number, code, or name</label>
         <div class="combobox" data-combobox="account">
-          <input type="text" class="account-input" placeholder="Select a department first..." aria-label="Account" disabled />
+          <input type="text" class="account-input" placeholder="Select a department first..." aria-label="Account" maxlength="50" disabled />
           <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
           <ul class="combobox-listbox" role="listbox" hidden></ul>
         </div>
@@ -312,7 +277,7 @@
       </td>
       <td>
         <label class="sr-only">Amount</label>
-        <input type="text" class="amount-input" inputmode="decimal" placeholder="0.00" aria-label="Amount" />
+        <input type="text" class="amount-input" inputmode="decimal" placeholder="0.00" aria-label="Amount" maxlength="13" />
       </td>
       <td class="no-print">
         <button type="button" class="remove-row-btn" aria-label="Remove row" title="Remove row">&times;</button>
@@ -327,7 +292,7 @@
     <div class="field department-field">
       <label class="department-field-label"></label>
       <div class="combobox" data-combobox="department">
-        <input type="text" class="department-input" placeholder="Search department by name or code..." aria-label="Department" />
+        <input type="text" class="department-input" placeholder="Search department by name or code..." aria-label="Department" maxlength="50" />
         <button type="button" class="combobox-clear no-print" aria-label="Clear department selection" hidden>&times;</button>
         <ul class="combobox-listbox" role="listbox" hidden></ul>
       </div>

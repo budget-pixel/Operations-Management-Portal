@@ -147,6 +147,7 @@
     var accountListbox = lineEl.querySelector('.combobox-listbox');
     var accountErrorEl = lineEl.querySelector('.account-error');
     var projectInput = lineEl.querySelector('.project-input');
+    var contractPoInput = lineEl.querySelector('.contract-po-input');
     var amountInput = lineEl.querySelector('.amount-input');
     var amountErrorEl = lineEl.querySelector('.amount-error');
     var justificationInput = lineEl.querySelector('.justification-input');
@@ -160,6 +161,8 @@
     lineEl.querySelector('.line-account-label').setAttribute('for', accountInput.id);
     projectInput.id = uid + '-project';
     lineEl.querySelector('.line-project-label').setAttribute('for', projectInput.id);
+    contractPoInput.id = uid + '-contract-po';
+    lineEl.querySelector('.line-contract-po-label').setAttribute('for', contractPoInput.id);
     amountInput.id = uid + '-amount';
     lineEl.querySelector('.line-amount-label').setAttribute('for', amountInput.id);
     justificationInput.id = uid + '-justification';
@@ -170,6 +173,7 @@
       accountInput: accountInput,
       accountErrorEl: accountErrorEl,
       projectInput: projectInput,
+      contractPoInput: contractPoInput,
       amountInput: amountInput,
       amountErrorEl: amountErrorEl,
       justificationInput: justificationInput,
@@ -362,7 +366,10 @@
       }
 
       if (!Calculations.isValidAmount(line.amountInput.value)) {
-        Validation.setFieldError(line.amountInput, line.amountErrorEl, 'Enter a valid amount greater than 0.');
+        Validation.setFieldError(
+          line.amountInput, line.amountErrorEl,
+          'Enter a valid amount between 0.01 and ' + Calculations.formatCurrency(Calculations.MAX_AMOUNT) + '.'
+        );
         isValid = false;
         firstInvalidEl = firstInvalidEl || line.amountInput;
       } else {
@@ -416,6 +423,7 @@
         return {
           account: line.selectedAccount,
           projectCode: line.projectInput.value.trim(),
+          contractPoNumber: line.contractPoInput.value.trim(),
           amount: line.amountInput.value,
           justification: line.justificationInput.value.trim(),
         };
@@ -440,6 +448,15 @@
   function setSubmitting(isSubmitting) {
     submitBtn.disabled = isSubmitting;
     submitBtn.textContent = isSubmitting ? 'Submitting…' : submitBtnDefaultLabel;
+  }
+
+  // Called instead of setSubmitting(false) once a submission succeeds —
+  // the button stays disabled (Clear Form starts a fresh request), but
+  // its label needs to move on from "Submitting…", which would otherwise
+  // sit there indefinitely since success never calls setSubmitting(false).
+  function markSubmitted() {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitted';
   }
 
   function showSubmissionModal(requestId) {
@@ -552,6 +569,7 @@
     Submission.submit(requestData)
       .then(function (result) {
         hideStatus();
+        markSubmitted();
         showSubmissionModal(result.requestId);
       })
       .catch(function (err) {

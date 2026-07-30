@@ -44,12 +44,12 @@
           <div class="grid-2">
             <div class="field">
               <label for="requesterName">Requester Name <span class="required">*</span></label>
-              <input type="text" id="requesterName" name="requesterName" required />
+              <input type="text" id="requesterName" name="requesterName" maxlength="50" required />
               <p class="error-text" id="requesterName-error"></p>
             </div>
             <div class="field">
               <label for="requesterEmail">Requester Email <span class="required">*</span></label>
-              <input type="email" id="requesterEmail" name="requesterEmail" placeholder="you@waltoncountyfl.gov" required />
+              <input type="email" id="requesterEmail" name="requesterEmail" placeholder="you@waltoncountyfl.gov" maxlength="50" required />
               <p class="error-text" id="requesterEmail-error"></p>
             </div>
           </div>
@@ -64,7 +64,7 @@
           <div class="field department-field">
             <label for="departmentInput">Department <span class="required">*</span></label>
             <div class="combobox" data-combobox="department">
-              <input type="text" id="departmentInput" class="department-input" placeholder="Search department by name or code..." aria-label="Department" />
+              <input type="text" id="departmentInput" class="department-input" placeholder="Search department by name or account..." aria-label="Department" maxlength="50" />
               <button type="button" class="combobox-clear no-print" aria-label="Clear department selection" hidden>&times;</button>
               <ul class="combobox-listbox" id="departmentInput-listbox" role="listbox" hidden></ul>
             </div>
@@ -132,31 +132,36 @@
         <button type="button" class="remove-row-btn no-print" aria-label="Remove this rollforward request" title="Remove this rollforward request">&times;</button>
       </div>
 
-      <div class="grid-2">
-        <div class="field">
-          <label class="line-account-label">Expense Account <span class="required">*</span></label>
-          <div class="combobox" data-combobox="account">
-            <input type="text" class="account-input" placeholder="Select a department first..." aria-label="Expense Account" disabled />
-            <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
-            <ul class="combobox-listbox" role="listbox" hidden></ul>
-          </div>
-          <p class="error-text account-error"></p>
+      <div class="field">
+        <label class="line-account-label">Expense Account <span class="required">*</span></label>
+        <div class="combobox" data-combobox="account">
+          <input type="text" class="account-input" placeholder="Select a department first..." aria-label="Expense Account" maxlength="50" disabled />
+          <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
+          <ul class="combobox-listbox" role="listbox" hidden></ul>
         </div>
+        <p class="error-text account-error"></p>
+      </div>
+
+      <div class="grid-2">
         <div class="field">
           <label class="line-project-label">Project Number</label>
           <input type="text" class="project-input" inputmode="numeric" maxlength="5" placeholder="Optional" />
+        </div>
+        <div class="field">
+          <label class="line-contract-po-label">Contract or PO Number</label>
+          <input type="text" class="contract-po-input" maxlength="50" placeholder="Optional" />
         </div>
       </div>
 
       <div class="field">
         <label class="line-amount-label">Amount Requested to Roll Forward <span class="required">*</span></label>
-        <input type="text" class="amount-input" inputmode="decimal" placeholder="0.00" />
+        <input type="text" class="amount-input" inputmode="decimal" placeholder="0.00" maxlength="13" />
         <p class="error-text amount-error"></p>
       </div>
 
       <div class="field">
         <label class="line-justification-label">Detailed Justification <span class="required">*</span></label>
-        <textarea class="justification-input" rows="4" placeholder="Explain why this unspent budget needs to roll forward..."></textarea>
+        <textarea class="justification-input" rows="4" maxlength="250" placeholder="Explain why this unspent budget needs to roll forward..."></textarea>
         <p class="error-text justification-error"></p>
       </div>
     </div>

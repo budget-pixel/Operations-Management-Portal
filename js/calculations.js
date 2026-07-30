@@ -16,18 +16,24 @@ window.BudgetApp.Calculations = (function () {
     currency: 'USD',
   });
 
+  // Upper bound for any dollar amount entered anywhere in the app (Transfer
+  // rows, Rollforward lines) — shared here so both forms enforce the same
+  // ceiling with one definition instead of a hardcoded number in each.
+  var MAX_AMOUNT = 99999999.99;
+
   // Strips everything but digits/decimal/minus and returns a number (0 if unparsable).
   function parseAmount(value) {
     var numeric = Number(String(value).replace(/[^0-9.-]/g, ''));
     return isFinite(numeric) ? numeric : 0;
   }
 
-  // A row "counts" only if it has a positive numeric amount.
+  // A row "counts" only if it has a positive numeric amount no greater than
+  // MAX_AMOUNT.
   function isValidAmount(value) {
     var trimmed = String(value).trim();
     if (trimmed === '') return false;
     var numeric = Number(trimmed.replace(/[^0-9.-]/g, ''));
-    return isFinite(numeric) && numeric > 0;
+    return isFinite(numeric) && numeric > 0 && numeric <= MAX_AMOUNT;
   }
 
   function formatCurrency(amount) {
@@ -45,5 +51,6 @@ window.BudgetApp.Calculations = (function () {
     isValidAmount: isValidAmount,
     formatCurrency: formatCurrency,
     sumAmounts: sumAmounts,
+    MAX_AMOUNT: MAX_AMOUNT,
   };
 })();
