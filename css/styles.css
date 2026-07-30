@@ -208,16 +208,13 @@ h3 {
   margin: 0;
 }
 
+/* auto-fit + minmax scales to however many cards js/landing.js renders —
+   two side by side today, three or four wrapping into extra columns/rows
+   automatically later, with no breakpoint to hand-tune per card count. */
 .landing-cards {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1.25rem;
-}
-
-@media (min-width: 700px) {
-  .landing-cards {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 .landing-card {

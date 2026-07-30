@@ -34,24 +34,13 @@
       <p>Select the type of budget request you would like to submit.</p>
     </div>
 
-    <section class="landing-cards">
-
-      <div class="card landing-card">
-        <h2>Budget Transfer / Amendment Request</h2>
-        <p>Transfer existing budget between accounts or amend the current fiscal year budget.</p>
-        <a href="transfer.html" class="btn btn-primary">Start Budget Transfer</a>
-      </div>
-
-      <div class="card landing-card">
-        <h2>Fiscal Year Rollforward Request</h2>
-        <p>Request authorization to roll unspent budget into the next fiscal year.</p>
-        <a href="rollforward.html" class="btn btn-primary">Start Rollforward Request</a>
-      </div>
-
-    </section>
+    <!-- Cards rendered by js/landing.js from its REQUEST_TYPES array —
+         add a new request type there, not here. -->
+    <section id="landingCards" class="landing-cards"></section>
 
   </main>
 
   <script src="js/nav.js"></script>
+  <script src="js/landing.js"></script>
 </body>
 </html>
