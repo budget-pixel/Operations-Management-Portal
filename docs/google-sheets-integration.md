@@ -5,8 +5,10 @@ workbook, read through a small Google Apps Script "Web App" that you deploy
 yourself. This keeps your spreadsheet completely private — no API key is
 ever embedded in the website's code, and nothing needs to be shared publicly.
 The same Apps Script also *receives* submitted requests (§6 below): it
-generates a PDF, saves it to Drive, records the request in two more tabs in
-this same workbook, and emails the PDF to staff and the requestor.
+generates a PDF, records the request in two more tabs in this same
+workbook, and emails the PDF to Budget Office staff and the requestor. The
+PDF is never saved anywhere (no Google Drive) — it only exists long enough
+to attach to those two emails.
 
 ## 1. Prepare the spreadsheet
 
@@ -67,9 +69,11 @@ only the code, which is what accounts are filtered by.
 4. Click **Deploy**, then **Authorize access** and approve the permissions
    prompt (you'll see an "unverified app" warning — this is expected for a
    script only you use; click **Advanced → Go to (project name)** to proceed).
-   Submitting a request needs Gmail (to send the notification/confirmation
-   emails) and Drive (to save the PDF) access in addition to Sheets — you'll
-   see all three requested in this consent screen.
+   Submitting a request needs Gmail access (to send the notification/
+   confirmation emails) in addition to Sheets — you should see both
+   requested in this consent screen. If you don't (or a submission later
+   fails with a Mail permission error), see the `authorizeAdditionalScopes`
+   troubleshooting step below.
 5. Copy the **Web app URL** shown after deployment. It looks like:
    `https://script.google.com/macros/s/AKfycb.../exec`
 
@@ -93,32 +97,28 @@ sheet, use the **Refresh Chart of Accounts** link on the form (or simply
 close and reopen the tab) to pick up the changes — you do **not** need to
 redeploy the Apps Script for data edits, only if you change `Code.gs` itself.
 
-## 6. Set up request submission (Sheets storage, PDF, email)
+## 6. Set up request submission (Sheets storage + email)
 
 Clicking **Submit Budget Transfer Request** on the site sends the completed
-form to the same Apps Script, which generates a PDF, saves it to a Drive
-folder you choose, records the request across two more tabs in this
-workbook, and emails the PDF to county staff and the requestor. This needs
-three more tabs and one Drive folder, none of which existed for the
-read-only Chart of Accounts setup above.
+form to the same Apps Script, which generates a PDF, records the request
+across two more tabs in this workbook, and emails the PDF to Budget Office
+staff and the requestor. The PDF itself is never saved anywhere — it's
+built fresh for each submission, attached to both emails, and discarded.
+This needs three more tabs, none of which existed for the read-only Chart
+of Accounts setup above.
 
 **Settings** — `Setting | Value` columns. One row per setting:
 
 | Setting | Value |
 |---|---|
 | NotificationEmails | budget@county.gov;administrator@county.gov |
-| PDFFolderId | 1AbCdEfGhIjKlMnOpQrStUvWxYz |
 | FiscalYear | 2026 |
 | RequestPrefix | BTR |
 
 - `NotificationEmails` — semicolon-separated list; every address gets the
-  county notification email for every submitted request. Edit this list any
-  time staffing changes — no redeploy needed, since it's read fresh on every
-  submission.
-- `PDFFolderId` — the Drive folder submitted PDFs are saved into. Create or
-  choose a folder in Drive, open it, and copy the ID out of its URL
-  (`https://drive.google.com/drive/folders/`**`1AbCdEfGhIjKlMnOpQrStUvWxYz`**).
-  The account that deployed the Apps Script needs write access to this folder.
+  Budget Office notification email for every submitted request. Edit this
+  list any time staffing changes — no redeploy needed, since it's read
+  fresh on every submission.
 - `FiscalYear` — used to build Request IDs (`{FiscalYear}-000001`, e.g.
   `2026-000001`). Update it whenever your fiscal year rolls over; the
   sequence number for a new year starts back at `000001`.
@@ -129,7 +129,7 @@ read-only Chart of Accounts setup above.
 sheet with this exact header row (Apps Script appends rows in this order,
 not by header name, so the order must match):
 
-`Request ID | Timestamp | Requestor Name | Requestor Email | Amendment Type | Department Code | Department Name | Justification | Total Transfer Amount | Resolution Number | Supporting Notes | PDF File ID | PDF File URL | Submission Status | Last Updated`
+`Request ID | Timestamp | Requestor Name | Requestor Email | Amendment Type | Department Code | Department Name | Justification | Total Transfer Amount | Resolution Number | Supporting Notes | Submission Status | Last Updated`
 
 **Budget Transfer Lines** — one row per Transfer From/To line (every
 submitted request produces multiple rows here). Header row, in order:
@@ -159,15 +159,21 @@ workflow to fill in without changing the sheet's structure.
   comparing, so this should already be handled — if it's still happening,
   double-check the department code actually appears (in any zero-padded
   form) on the corresponding Expense/Revenue rows at all.
-- **Submission fails with a Sheets/Settings/PDFFolderId error** — one of the
-  §6 tabs is missing, misnamed, or `PDFFolderId` in Settings is blank/wrong.
-  The error message names which one.
-- **Submission fails with a Drive permission error** — the Google account
-  that deployed the Apps Script doesn't have write access to the folder
-  named by `PDFFolderId`.
-- **No emails arrive, but the request appears in Sheets/Drive** — check
+- **Submission fails with a "Sheet not found" error** — one of the §6 tabs
+  (`Settings`, `Budget Transfer Requests`, `Budget Transfer Lines`) is
+  missing or misnamed. The error message names which one.
+- **Submission fails with "You do not have permission to call
+  MailApp..."** — the account that deployed the script hasn't granted
+  Gmail access yet, and deploying a "new version" doesn't reliably
+  re-prompt for a scope the script didn't need before. Fix: in the Apps
+  Script editor, select **authorizeAdditionalScopes** in the function
+  dropdown next to Run, click **Run**, and click through the permission
+  prompt (it doesn't matter if the run itself reports an error afterward —
+  the point is triggering the consent screen). Your existing deployment
+  URL doesn't change; it'll just start working once the scope is granted.
+- **No emails arrive, but the request appears in Sheets** — check
   `NotificationEmails` in Settings for typos, and check the requestor's
-  spam folder. Sheets/Drive writes and email sending are independent steps;
+  spam folder. The Sheets write and email sending are independent steps;
   a request can be fully saved even if an email address is wrong.
 - **Want more detail on a failed submission** — open the Apps Script editor
   → **Executions** (left sidebar) → find the failed `doPost` run. The full

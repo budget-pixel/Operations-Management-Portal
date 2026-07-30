@@ -703,9 +703,11 @@
   }
 
   // Rich confirmation shown once the server accepts a submission: Request
-  // ID, who was emailed, and a link to the saved PDF — matches the
-  // confirmation copy from the feature spec.
-  function showSubmissionSuccess(requestId, pdfUrl, requestorEmail) {
+  // ID and who was emailed — matches the confirmation copy from the
+  // feature spec. No PDF link: the server never saves the PDF anywhere
+  // (it's built fresh, attached to both emails, and discarded), so there's
+  // nothing to link to — the requestor's own inbox is the copy of record.
+  function showSubmissionSuccess(requestId, requestorEmail) {
     statusBanner.className = 'banner no-print banner-success';
     statusBanner.innerHTML = '';
 
@@ -717,9 +719,9 @@
 
     [
       'Request ID: ' + requestId,
-      'A confirmation email has been sent to ' + requestorEmail + '.',
-      'County Budget staff have also been notified.',
-      'Your completed Budget Transfer Request has been saved and emailed as a PDF.',
+      'A confirmation email has been sent to: ' + requestorEmail,
+      'Budget Office staff have also been notified.',
+      'Your completed Budget Transfer Request has been emailed to you for your records.',
     ].forEach(function (line) {
       var lineEl = document.createElement('div');
       lineEl.textContent = line;
@@ -727,20 +729,6 @@
     });
 
     statusBanner.appendChild(textWrap);
-
-    if (pdfUrl) {
-      var actions = document.createElement('span');
-      actions.className = 'banner-actions';
-      var link = document.createElement('a');
-      link.href = pdfUrl;
-      link.target = '_blank';
-      link.rel = 'noopener';
-      link.textContent = 'View PDF';
-      link.className = 'btn btn-secondary';
-      actions.appendChild(link);
-      statusBanner.appendChild(actions);
-    }
-
     statusBanner.hidden = false;
   }
 
@@ -947,7 +935,7 @@
 
     Submission.submit(requestData)
       .then(function (result) {
-        showSubmissionSuccess(result.requestId, result.pdfUrl, requestData.requestorEmail);
+        showSubmissionSuccess(result.requestId, requestData.requestorEmail);
         // The request is now officially submitted — an old "restore
         // draft?" prompt on a future visit would just be stale.
         Storage.clearDraft();

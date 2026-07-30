@@ -19,7 +19,7 @@ window.BudgetApp.Submission = (function (GoogleSheets) {
    *
    * @param {Object} requestData - the same shape app.js's
    *   collectFormData() produces, plus requestorEmail.
-   * @returns {Promise<{success: true, requestId: string, pdfUrl: string}>}
+   * @returns {Promise<{success: true, requestId: string}>}
    *   Resolves on a successful submission. Rejects with an Error whose
    *   `message` is safe to show the user (network failure, HTTP error, or
    *   the server's own validation/processing error message).

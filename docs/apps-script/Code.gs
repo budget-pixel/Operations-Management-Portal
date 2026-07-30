@@ -6,8 +6,10 @@
  * your Chart of Accounts spreadsheet (Extensions -> Apps Script). It reads
  * the COA tabs for the website's dropdowns (doGet) and, separately,
  * receives completed Budget Transfer Requests (doPost): generates a PDF,
- * saves it to Drive, records the request in two normalized worksheets, and
- * emails the PDF to county staff and the requestor.
+ * records the request in two normalized worksheets, and emails the PDF to
+ * Budget Office staff and the requestor. The PDF is never saved anywhere
+ * (no Google Drive) — it exists only in memory for as long as it takes to
+ * attach it to those two outgoing emails.
  *
  * Expected tabs and exact header row text:
  *
@@ -26,17 +28,47 @@
  * their Project column — that comes back as projectCode so the client can
  * search by it and auto-fill it once that account is selected.
  *
- * Notification recipients, the Drive folder for saved PDFs, the fiscal
- * year, and the (currently unused) Request ID prefix are NOT hardcoded
- * here — they're read from the "Settings" sheet on every submission, so
- * staff can update them without touching this file. See getSettings().
+ * Notification recipients, the fiscal year, and the (currently unused)
+ * Request ID prefix are NOT hardcoded here — they're read from the
+ * "Settings" sheet on every submission, so staff can update them without
+ * touching this file. See getSettings().
  *
- * Deploying doPost for the first time (or after adding permissions) will
- * prompt for a NEW Google consent screen — Mail and Drive access are new
- * scopes beyond doGet's read-only Sheets access.
+ * Deploying doPost for the first time adds a new required scope (Gmail,
+ * to send the notification/confirmation emails) beyond doGet's read-only
+ * Sheets access. Deploying a "new version" of an existing deployment does
+ * NOT reliably re-prompt for that new scope on its own — see
+ * authorizeAdditionalScopes() below if doPost fails with a permission
+ * error on MailApp.
  *
  * See docs/google-sheets-integration.md for full setup steps.
  */
+
+// =============================================================
+// One-time manual authorization helper
+// =============================================================
+
+/**
+ * Not called by the website — run this ONCE manually from the Apps
+ * Script editor (select "authorizeAdditionalScopes" in the function
+ * dropdown next to Run, then click Run) after adding doPost, or any time
+ * doPost fails with a "You do not have permission to call MailApp..."
+ * error.
+ *
+ * Deploying a "new version" of an existing deployment does not reliably
+ * re-prompt for a scope the script didn't need before (Gmail, here). And
+ * running doGet or doPost directly doesn't help either — doGet never
+ * touches Mail so there's nothing new to authorize, and doPost crashes
+ * immediately on its missing event parameter before it ever reaches the
+ * Mail call. This function's only job is to touch MailApp directly (no
+ * side effects — getRemainingDailyQuota() doesn't send anything) so the
+ * editor's authorization prompt has something to ask about. Once you
+ * click through that prompt, the deployed Web App (which runs as your
+ * account) has the same grant and doPost's real MailApp.sendEmail() calls
+ * will work.
+ */
+function authorizeAdditionalScopes() {
+  MailApp.getRemainingDailyQuota();
+}
 
 // =============================================================
 // Chart of Accounts read endpoint (unchanged)
@@ -179,8 +211,8 @@ var DEPARTMENT_MODE_BY_TYPE = {
  * exempt from preflight. We just parse the raw body as JSON regardless of
  * what Content-Type was declared.
  *
- * Output: a JSON response { success: true, requestId, pdfUrl } on success,
- * or { success: false, error } on failure (validation or otherwise). Never
+ * Output: a JSON response { success: true, requestId } on success, or
+ * { success: false, error } on failure (validation or otherwise). Never
  * throws — every failure path is caught and reported in the response body
  * so the client always gets a definite answer instead of hanging.
  */
@@ -201,17 +233,21 @@ function doPost(e) {
     var lines = buildTransferLines(requestData);
     var totalAmount = sumLineAmounts(lines, 'Transfer From');
 
+    // One PDF blob, built once, reused for both emails below — never
+    // written to Drive or anywhere else, so it only exists for the
+    // lifetime of this request.
     var pdfBlob = buildRequestPdf(requestData, requestId, timestamp, lines, totalAmount);
-    var driveFile = savePdfToDrive(settings.PDFFolderId, pdfBlob);
 
-    appendRequestRow(ss, {
+    // Written as a pair, with a rollback if the second write fails, so a
+    // request row is never left in the sheet with no matching lines (an
+    // incomplete/orphaned record) — see writeRequestAndLines().
+    writeRequestAndLines(ss, {
       requestId: requestId,
       timestamp: timestamp,
       requestData: requestData,
       totalAmount: totalAmount,
-      driveFile: driveFile,
+      lines: lines,
     });
-    appendLineRows(ss, requestId, lines);
 
     sendCountyNotification(settings, requestData, requestId, timestamp, totalAmount, pdfBlob);
     sendRequestorConfirmation(requestData, requestId, pdfBlob);
@@ -219,7 +255,6 @@ function doPost(e) {
     return jsonResponse({
       success: true,
       requestId: requestId,
-      pdfUrl: driveFile.getUrl(),
     });
   } catch (err) {
     // Full stack goes to the Apps Script execution log (Executions tab)
@@ -237,8 +272,8 @@ function doPost(e) {
  * low to need caching, and staff editing Settings should take effect
  * immediately.
  *
- * Output shape: { NotificationEmails: string[], PDFFolderId: string,
- * FiscalYear: string, RequestPrefix: string }.
+ * Output shape: { NotificationEmails: string[], FiscalYear: string,
+ * RequestPrefix: string }.
  */
 function getSettings(ss) {
   var sheet = ss.getSheetByName('Settings');
@@ -258,7 +293,6 @@ function getSettings(ss) {
       .split(';')
       .map(function (email) { return email.trim(); })
       .filter(Boolean),
-    PDFFolderId: raw.PDFFolderId || '',
     FiscalYear: raw.FiscalYear || String(new Date().getFullYear()),
     // Not used in the Request ID format yet (see generateRequestId) —
     // stored now so switching formats later doesn't need a code change.
@@ -439,15 +473,45 @@ function sumLineAmounts(lines, direction) {
 // ---------- Sheets writers ----------
 
 /**
+ * Writes both sheet rows for one request as a pair: the request summary
+ * row, then its transfer lines. If the lines write fails, the just-added
+ * request row is deleted before re-throwing — a request row with zero
+ * matching lines would be exactly the kind of incomplete/orphaned record
+ * doPost must not leave behind.
+ *
+ * Input: the spreadsheet, and { requestId, timestamp, requestData,
+ * totalAmount, lines }.
+ * Output: none. Throws on failure (after rolling back the request row).
+ */
+function writeRequestAndLines(ss, params) {
+  var requestRowNumber = appendRequestRow(ss, params);
+  try {
+    appendLineRows(ss, params.requestId, params.lines);
+  } catch (err) {
+    var requestsSheet = ss.getSheetByName('Budget Transfer Requests');
+    if (requestsSheet && requestRowNumber) {
+      requestsSheet.deleteRow(requestRowNumber);
+    }
+    throw new Error(
+      'Could not record transfer lines (request row rolled back): '
+      + (err && err.message ? err.message : err)
+    );
+  }
+}
+
+/**
  * Appends one row to "Budget Transfer Requests".
  * Columns: Request ID, Timestamp, Requestor Name, Requestor Email,
  * Amendment Type, Department Code, Department Name, Justification, Total
- * Transfer Amount, Resolution Number, Supporting Notes, PDF File ID, PDF
- * File URL, Submission Status, Last Updated.
+ * Transfer Amount, Resolution Number, Supporting Notes, Submission
+ * Status, Last Updated.
  *
  * Resolution Number / Supporting Notes are intentionally left blank — the
  * form doesn't collect them yet; they're here for a later workflow to
  * fill in without a schema change.
+ *
+ * Output: the 1-based row number the request was written to (so
+ * writeRequestAndLines can roll it back if the lines write fails).
  */
 function appendRequestRow(ss, params) {
   var sheet = ss.getSheetByName('Budget Transfer Requests');
@@ -474,11 +538,11 @@ function appendRequestRow(ss, params) {
     params.totalAmount,
     '',
     '',
-    params.driveFile.getId(),
-    params.driveFile.getUrl(),
     'Submitted',
     params.timestamp,
   ]);
+
+  return sheet.getLastRow();
 }
 
 /**
@@ -515,11 +579,14 @@ function appendLineRows(ss, requestId, lines) {
 // ---------- PDF ----------
 
 /**
- * Builds the one PDF blob used for the Drive save AND both emails (no
- * duplicated PDF-generation logic — every caller in doPost shares this
- * exact blob). Converts a simple, self-contained HTML document to PDF via
- * Apps Script's blob MIME conversion, which doesn't need a temporary
- * Google Doc for HTML this simple (headings, text, and bordered tables).
+ * Builds the one PDF blob used for BOTH outgoing emails (no duplicated
+ * PDF-generation logic — every caller in doPost shares this exact blob).
+ * Converts a simple, self-contained HTML document to PDF via Apps
+ * Script's blob MIME conversion, which doesn't need a temporary Google
+ * Doc for HTML this simple (headings, text, and bordered tables). This
+ * blob is never written to Drive or anywhere else — it only exists in
+ * memory for the lifetime of this request, purely to attach to the two
+ * emails below.
  *
  * Input: the request payload, its Request ID, submission timestamp, the
  * flattened transfer lines, and the (Transfer From) total amount.
@@ -593,23 +660,13 @@ function buildLinesTableHtml(lines) {
     + '<tbody>' + rowsHtml + '</tbody></table>';
 }
 
-// ---------- Drive ----------
-
-function savePdfToDrive(folderId, pdfBlob) {
-  if (!folderId) {
-    throw new Error('PDFFolderId is not set in the Settings sheet.');
-  }
-  var folder = DriveApp.getFolderById(folderId);
-  return folder.createFile(pdfBlob);
-}
-
 // ---------- Email ----------
 
 /**
  * Emails the submitted request's PDF to every address in
  * Settings!NotificationEmails. Silently does nothing if that list is
  * empty (unconfigured) rather than failing the whole submission over a
- * missing setting — the request is still saved to Sheets/Drive either way.
+ * missing setting — the request is still saved to Sheets either way.
  */
 function sendCountyNotification(settings, data, requestId, timestamp, totalAmount, pdfBlob) {
   if (settings.NotificationEmails.length === 0) return;
@@ -621,15 +678,15 @@ function sendCountyNotification(settings, data, requestId, timestamp, totalAmoun
     + 'Request ID:\n' + requestId + '\n\n'
     + 'Department:\n' + (department ? department.name : '—') + '\n\n'
     + 'Amendment Type:\n' + (AMENDMENT_TYPE_LABELS[data.amendmentType] || '') + '\n\n'
-    + 'Transfer Amount:\n' + formatCurrency(totalAmount) + '\n\n'
-    + 'Submitted:\n' + formatTimestampForEmail(timestamp) + '\n\n'
-    + 'Requestor:\n' + (data.preparedBy || '') + '\n\n'
+    + 'Total Transfer Amount:\n' + formatCurrency(totalAmount) + '\n\n'
+    + 'Submitted By:\n' + (data.preparedBy || '') + '\n\n'
     + 'Requestor Email:\n' + (data.requestorEmail || '') + '\n\n'
+    + 'Submission Date:\n' + formatTimestampForEmail(timestamp) + '\n\n'
     + 'The completed Budget Transfer Request is attached.';
 
   MailApp.sendEmail({
     to: settings.NotificationEmails.join(','),
-    subject: 'Budget Transfer Request Submitted - Request #' + requestId,
+    subject: 'Budget Transfer Request Submitted – Request #' + requestId,
     body: body,
     attachments: [pdfBlob],
   });
@@ -638,8 +695,8 @@ function sendCountyNotification(settings, data, requestId, timestamp, totalAmoun
 function sendRequestorConfirmation(data, requestId, pdfBlob) {
   var body = 'Thank you for submitting your Budget Transfer Request.\n\n'
     + 'Request ID:\n' + requestId + '\n\n'
-    + 'Your request has been received and forwarded for processing.\n\n'
-    + 'A copy of your completed request is attached for your records.';
+    + 'Your request has been successfully submitted and forwarded to the Budget Office for review.\n\n'
+    + 'A copy of your completed Budget Transfer Request is attached for your records.';
 
   MailApp.sendEmail({
     to: data.requestorEmail,
