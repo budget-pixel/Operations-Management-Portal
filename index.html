@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#003e28" />
   <title>Budget Management Portal</title>
   <meta name="description" content="Submit budget transfer/amendment requests or fiscal year rollforward requests." />
   <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
@@ -10,9 +11,9 @@
 </head>
 <body data-page="home">
 
-  <header class="site-header">
+  <header class="site-header no-print">
     <div class="header-inner">
-      <div class="brand">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
         <span class="brand-seal">
           <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
         </span>
@@ -20,12 +21,13 @@
           <span class="brand-top">Walton County</span>
           <span class="brand-bottom">Board of County Commissioners</span>
         </span>
-      </div>
-      <h1 class="page-title">Budget Management Portal</h1>
+      </a>
+      <nav id="siteNav" aria-label="Budget Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </header>
-
-  <nav id="siteNav"></nav>
 
   <main class="page">
 

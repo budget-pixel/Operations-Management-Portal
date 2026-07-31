@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fiscal Year Rollforward Request</title>
+  <meta name="theme-color" content="#003e28" />
+  <title>Rollforward Request</title>
   <meta name="description" content="Request authorization to roll unspent budget into the next fiscal year." />
   <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body data-page="rollforward">
 
-  <header class="site-header">
+  <header class="site-header no-print">
     <div class="header-inner">
-      <div class="brand">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
         <span class="brand-seal">
           <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
         </span>
@@ -20,14 +21,23 @@
           <span class="brand-top">Walton County</span>
           <span class="brand-bottom">Board of County Commissioners</span>
         </span>
-      </div>
-      <h1 class="page-title">Fiscal Year Rollforward Request</h1>
+      </a>
+      <nav id="siteNav" aria-label="Budget Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </header>
 
-  <nav id="siteNav"></nav>
-
   <main class="page">
+
+    <div class="portal-page-heading">
+      <div class="page-eyebrow">Budget Management Portal</div>
+      <div class="portal-page-heading-row">
+        <h1>Rollforward Request</h1>
+        <button type="button" id="clearBtn" class="btn btn-danger no-print">Clear Form</button>
+      </div>
+    </div>
 
     <!-- Chart of Accounts load status (loading / error / loaded+refresh) -->
     <div id="coaStatusBanner" class="banner banner-info no-print" hidden></div>
@@ -37,10 +47,18 @@
 
     <form id="rollforwardForm" novalidate>
 
-      <!-- Requester information -->
+      <!-- Request information — same field set as Budget Transfer's
+           Request Information card (see transfer.html), adapted to the
+           rollforward context. -->
       <section class="card">
-        <h2 class="section-title">Requester Information</h2>
+        <h2 class="section-title">Request Information</h2>
         <div class="card-body">
+          <div class="field">
+            <label for="date">Date <span class="required">*</span></label>
+            <input type="date" id="date" name="date" required />
+            <p class="error-text" id="date-error"></p>
+          </div>
+
           <div class="grid-2">
             <div class="field">
               <label for="requesterName">Requester Name <span class="required">*</span></label>
@@ -48,10 +66,16 @@
               <p class="error-text" id="requesterName-error"></p>
             </div>
             <div class="field">
-              <label for="requesterEmail">Requester Email <span class="required">*</span></label>
-              <input type="email" id="requesterEmail" name="requesterEmail" placeholder="you@waltoncountyfl.gov" maxlength="50" required />
-              <p class="error-text" id="requesterEmail-error"></p>
+              <label for="title">Title <span class="required">*</span></label>
+              <input type="text" id="title" name="title" maxlength="50" required />
+              <p class="error-text" id="title-error"></p>
             </div>
+          </div>
+
+          <div class="field">
+            <label for="requesterEmail">Requester Email <span class="required">*</span></label>
+            <input type="email" id="requesterEmail" name="requesterEmail" placeholder="you@waltoncountyfl.gov" maxlength="50" required />
+            <p class="error-text" id="requesterEmail-error"></p>
           </div>
         </div>
       </section>
@@ -114,10 +138,42 @@
       <!-- Actions -->
       <div class="actions no-print">
         <button type="submit" id="submitBtn" class="btn btn-primary">Submit Rollforward Request</button>
-        <button type="button" id="clearBtn" class="btn btn-danger">Clear Form</button>
+        <button type="button" id="printBtn" class="btn btn-secondary">Print Form</button>
       </div>
 
     </form>
+
+    <!-- Print-only clerical entry view — populated by rollforward.js's
+         populatePrintView() right before window.print() is called.
+         Deliberately separate from the on-screen form: only lines with a
+         selected account print, and there's no interactive/empty cruft
+         (comboboxes, add/remove buttons, unfilled lines). Mirrors
+         transfer.html's #printView; one bordered block per line instead
+         of a table since Justification needs full-width room to read. -->
+    <div id="printView" class="print-only">
+      <div class="print-header">
+        <img class="print-seal" src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        <div>
+          <h1>Rollforward Request</h1>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Date:</span> <span id="printDate"></span></span>
+            <span><span class="print-field-label">Requester Name:</span> <span id="printRequesterName"></span></span>
+            <span><span class="print-field-label">Title:</span> <span id="printTitle"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Requester Email:</span> <span id="printRequesterEmail"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Department:</span> <span id="printDepartment"></span></span>
+            <span><span class="print-field-label">Fiscal Year:</span> <span id="printFiscalYear"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <div id="printLines"><!-- one .print-rf-line block per filled line, injected by js/rollforward.js --></div>
+
+      <div class="print-total">Total Amount Requested to Roll Forward: <span id="printLinesTotal"></span></div>
+    </div>
 
   </main>
 
@@ -187,6 +243,7 @@
   <script src="js/expenses.js"></script>
   <script src="js/accountSearch.js"></script>
   <script src="js/validation.js"></script>
+  <script src="js/print.js"></script>
   <script src="js/submission.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/rollforward.js"></script>

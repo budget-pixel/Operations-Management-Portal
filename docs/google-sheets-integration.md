@@ -1,17 +1,25 @@
 # Chart of Accounts — Google Sheets Integration
 
-The Budget Management Portal has two workflows — Budget Transfer /
-Amendment Request (`transfer.html`) and Fiscal Year Rollforward Request
-(`rollforward.html`) — and both share this same setup. Their Department
-and Account dropdowns are driven live by a Google Sheets workbook, read
-through a single small Google Apps Script "Web App" that you deploy
-yourself. This keeps your spreadsheet completely private — no API key is
-ever embedded in the website's code, and nothing needs to be shared
-publicly. The same Apps Script also *receives* submitted requests from
-both workflows (§6 and §7 below): it generates a PDF, records the request
-in its own sheet(s), and emails the PDF to Budget Office staff. PDFs are
-never saved anywhere (no Google Drive) — each exists only long enough to
-attach to that email.
+The Budget Management Portal has three workflows — Budget Request
+(`transfer.html`), Grant Amendment Request (`grant.html`), and Rollforward
+Request (`rollforward.html`) — and all three share this same setup. Their
+Department and Account dropdowns are driven live by a Google Sheets
+workbook, read through a single small Google Apps Script "Web App" that
+you deploy yourself. This keeps your spreadsheet completely private — no
+API key is ever embedded in the website's code, and nothing needs to be
+shared publicly. The same Apps Script also *receives* submitted requests
+from all three workflows (§6, §7, and §8 below): it generates a PDF,
+records the request in its own sheet(s), and emails the PDF to Budget
+Office staff. PDFs are never saved anywhere (no Google Drive) — each
+exists only long enough to attach to that email.
+
+Grant Amendment Request is different from the other two: it never
+searches the Chart of Accounts for an Expense or Revenue account. Instead
+it computes both accounts directly from four choices (Federal or State
+grant source, an activity code from the Florida Accounting Manual, the
+selected Department, and an amendment category) plus the entered amount
+— see §8 for the exact formula and the required "Grant Amendment
+Requests" sheet.
 
 ## 1. Prepare the spreadsheet
 
@@ -101,9 +109,9 @@ sheet, use the **Refresh Chart of Accounts** link on the form (or simply
 close and reopen the tab) to pick up the changes — you do **not** need to
 redeploy the Apps Script for data edits, only if you change `Code.gs` itself.
 
-## 6. Set up Budget Transfer submission (Sheets storage + email)
+## 6. Set up Budget Request submission (Sheets storage + email)
 
-Clicking **Submit Budget Transfer Request** on `transfer.html` sends the
+Clicking **Submit Budget Request** on `transfer.html` sends the
 completed form to the same Apps Script, which generates a PDF, records the
 request across two more tabs in this workbook, and emails the PDF to
 Budget Office staff. The PDF itself is never saved anywhere — it's built
@@ -121,11 +129,12 @@ Accounts setup above.
 
 - `NotificationEmails` — semicolon-separated list; every address gets the
   Budget Office notification email for every submitted request, from
-  **both** workflows. Edit this list any time staffing changes — no
+  **all three** workflows. Edit this list any time staffing changes — no
   redeploy needed, since it's read fresh on every submission.
-- `FiscalYear` — used to build Request IDs for **both** workflows:
-  Budget Transfer's `{FiscalYear}-000001` (e.g. `2026-000001`) and
-  Rollforward's `RF-{FiscalYear}-0001` (e.g. `RF-2026-0001`) — see §7.
+- `FiscalYear` — used to build Request IDs for **all three** workflows:
+  Budget Request's `{FiscalYear}-000001` (e.g. `2026-000001`),
+  Rollforward's `RF-{FiscalYear}-0001` (e.g. `RF-2026-0001`, see §7), and
+  Grant Amendment's `GR-{FiscalYear}-0001` (e.g. `GR-2026-0001`, see §8).
   Update it whenever your fiscal year rolls over; each sequence starts
   back at its first number for the new year.
 - `RequestPrefix` — stored for possible future use; the current Request ID
@@ -166,7 +175,7 @@ no new settings needed.
 (a request with 3 accounts writes 3 rows, all sharing one Request ID).
 Create the sheet with this exact header row, in order:
 
-`Timestamp | Request ID | Requester Name | Requester Email | Department Code | Department Name | Expense Account | Project Number | Contract or PO Number | Amount | Fiscal Year | Justification | Status | Submitted By`
+`Timestamp | Request ID | Requester Name | Requester Email | Department Code | Department Name | Expense Account | Project Number | Contract or PO Number | Amount | Fiscal Year | Justification | Status | Submitted By | Request Date | Title`
 
 Note the column order here is different from Budget Transfer Requests
 (`Timestamp` comes before `Request ID`) — this matches how the sheet was
@@ -174,7 +183,7 @@ specified, and `Code.gs`'s `generateRequestId()` already knows to look in
 the right column for each sheet.
 
 **Important — column order is positional, not name-matched.** `Code.gs`
-always writes values into columns A–N in the exact order listed above; it
+always writes values into columns A–P in the exact order listed above; it
 never looks at your header text to figure out where a value belongs. If
 you already have a `Rollforward Requests` sheet from before Contract or PO
 Number existed, **insert a new column between Project Number and Amount**
@@ -182,7 +191,55 @@ Number existed, **insert a new column between Project Number and Amount**
 column order still matches the list above — appending it at the end would
 silently shift every column after Project Number one position out of
 alignment with its header, the same kind of mismatch as a swapped/misplaced
-header.
+header. If you already have a `Rollforward Requests` sheet from before the
+form collected a Date and Title, **append `Request Date` and `Title` as
+two new trailing columns** — since they're last, this is the one case
+where appending (not inserting) is correct.
+
+## 8. Set up Grant Amendment submission
+
+Clicking **Submit Grant Amendment Request** on `grant.html` sends the
+completed form to the exact same Apps Script deployment — no separate URL,
+no separate deployment; the script tells the request types apart by the
+`requestType` field the client sends automatically. Reuses the same
+`Settings` sheet from §6 — no new settings needed.
+
+Grant Amendment is structurally different from Budget Request and
+Rollforward: it never searches `COA Expenses` or `COA Revenue` for an
+account. Instead the Revenue and Expense account numbers are **computed**
+from four choices on the form, entirely server-side (the server never
+trusts an account-number string the client sends, the same principle
+Budget Request already follows):
+
+- **Expense Account** = Department Code + the selected category's object
+  code + Grant Number, e.g. Department `00107010` + Equipment `564000`
+  + Grant Number `12345` → `00107010-564000-12345`. Category → object
+  code: Equipment `564000`, Construction `563000`, Design `531000`,
+  Salaries `512000`, Other `534000`.
+- **Revenue Account** = `[Fund + Grant Type code]` + `[Grant Type code +
+  Activity code]` + Grant Number, where Fund is the first 3 digits of
+  the Department Code and Grant Type code is `331` (Federal) or `334`
+  (State). E.g. Department `00107010` (fund `001`) + State + Activity
+  `500` (Economic Environment) + Grant Number `12345` →
+  `001334-334500-12345`. The Activity list comes from the Florida
+  Accounting Manual (Rule 69I-51.0012, F.A.C.) — see `ACTIVITY_CODES` in
+  `js/grant.js` (mirrored server-side in `Code.gs`'s
+  `buildGrantAccountNumbers()`) for the full 331.xxx/334.xxx code list.
+
+A submission produces exactly one Revenue line and one Expense line (both
+share the entered Amount), so unlike Rollforward this only needs one row
+per request, not a separate lines sheet. Unlike Budget Request/
+Rollforward, there's no Description field — the Revenue/Expense account
+pair and Grant Number are the record.
+
+**Grant Amendment Requests** — one row per submitted request. Create the
+sheet with this exact header row, in order:
+
+`Request ID | Timestamp | Prepared By | Title | Requestor Email | Grant Source | Activity Code | Activity Label | Department Code | Department Name | Category | Revenue Account | Expense Account | Amount | Grant Number | Status | Granting Agency | Grant Program Name | Board Approval Date`
+
+The last three columns (Granting Agency, Grant Program Name, Board
+Approval Date) feed the Generate Grant Resolution document on the page —
+Board Approval Date in particular becomes the resolution's adoption date.
 
 ## Troubleshooting
 
@@ -203,10 +260,10 @@ header.
   comparing, so this should already be handled — if it's still happening,
   double-check the department code actually appears (in any zero-padded
   form) on the corresponding Expense/Revenue rows at all.
-- **Submission fails with a "Sheet not found" error** — one of the §6/§7
+- **Submission fails with a "Sheet not found" error** — one of the §6/§7/§8
   tabs (`Settings`, `Budget Transfer Requests`, `Budget Transfer Lines`,
-  `Rollforward Requests`) is missing or misnamed. The error message names
-  which one.
+  `Rollforward Requests`, `Grant Amendment Requests`) is missing or
+  misnamed. The error message names which one.
 - **Submission fails with "You do not have permission to call
   MailApp..."** — the account that deployed the script hasn't granted
   Gmail access yet, and deploying a "new version" doesn't reliably

@@ -63,6 +63,7 @@ html,
 body {
   margin: 0;
   padding: 0;
+  overflow-x: auto;
 }
 
 body {
@@ -84,30 +85,33 @@ h3 {
 /* ---------- Site header ---------- */
 
 .site-header {
-  background: linear-gradient(135deg, #23354d 0%, var(--color-green-2) 58%, var(--color-gold) 100%);
+  background: linear-gradient(180deg, rgba(0, 62, 40, 0.96), rgba(0, 62, 40, 0.88));
   color: #ffffff;
-  padding: 1.5rem 1rem;
+  min-height: 88px;
+  padding: 22px clamp(22px, 4vw, 64px) 14px;
 }
 
 .header-inner {
-  max-width: 960px;
-  margin: 0 auto;
-  display: flex;
-  flex-wrap: wrap;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1.5rem;
+  column-gap: 24px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 14px;
+  height: 52px;
+  min-width: 284px;
+  color: #ffffff;
+  text-decoration: none;
 }
 
 .brand-seal {
-  width: 56px;
-  height: 56px;
+  width: 46px;
+  height: 46px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -119,72 +123,151 @@ h3 {
 }
 
 .brand-seal img {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
 }
 
 .brand-text {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0;
 }
 
 .brand-top {
-  font-size: 1.05rem;
+  display: block;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 24px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  /* Tuned (not computed) so "WALTON COUNTY" renders the same width as
+     "BOARD OF COUNTY COMMISSIONERS" below it at this font-size — a
+     static replacement for a runtime letter-spacing calc that used to
+     cause a visible flash on load (see js/nav.js history). */
+  letter-spacing: 2.73px;
   text-transform: uppercase;
-  line-height: 1.15;
+  line-height: 1;
   color: #ffffff;
+  white-space: nowrap;
 }
 
 .brand-bottom {
-  margin-top: 0.2rem;
-  font-size: 0.62rem;
+  display: block;
+  margin-top: 3px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10.588235px;
+  line-height: 9px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.82);
-}
-
-.page-title {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: 1.6rem;
-  color: #ffffff;
-  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
 }
 
 /* ---------- Site navigation (rendered by js/nav.js) ---------- */
 
 .site-nav {
-  background: var(--color-green-3);
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.25rem;
-  padding: 0.5rem 1rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .site-nav a {
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.92);
   text-decoration: none;
-  font-size: 0.85rem;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.03em;
-  padding: 0.5rem 0.9rem;
+  letter-spacing: 0;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
   border-radius: var(--radius-pill);
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .site-nav a:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--color-gold);
 }
 
-.site-nav a.is-active {
-  background: var(--color-gold);
-  color: var(--color-green-3);
+.nav-menu-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.nav-menu-toggle { display: none; }
+
+.nav-menu-toggle span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.nav-menu-toggle span:first-child { transform: translate(-50%, calc(-50% - 6px)); }
+.nav-menu-toggle span:last-child { transform: translate(-50%, calc(-50% + 6px)); }
+
+.portal-page-heading { margin: 4px 0 32px; }
+.portal-page-heading .page-eyebrow {
+  margin-bottom: 14px;
+  color: var(--color-green);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.portal-page-heading h1 {
+  color: #24344d;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.portal-page-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+
+@media (max-width: 860px) {
+  .header-inner { display: flex; flex-wrap: wrap; justify-content: space-between; }
+  .brand { min-width: 0; }
+  .nav-menu-toggle { display: inline-flex; flex: 0 0 40px; }
+  .site-nav {
+    order: 5;
+    flex: 1 0 100%;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 10px;
+    margin-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+  }
+  .site-header.is-menu-open .site-nav { display: flex; }
+  .site-nav a {
+    justify-content: flex-start;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.12);
+  }
 }
 
 /* ---------- Landing page ---------- */
@@ -245,9 +328,9 @@ h3 {
 /* ---------- Page layout ---------- */
 
 .page {
-  max-width: 960px;
+  max-width: 1140px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
+  padding: 1.5rem clamp(1.5rem, 5vw, 4rem) 3rem;
 }
 
 .card {
@@ -290,13 +373,25 @@ h3 {
   gap: 1.25rem;
 }
 
+/* Grid items default to min-width:auto, so a wide .transfer-table (its own
+   overflow-x:auto notwithstanding) was forcing these cards past the 1fr
+   track and out of alignment with the single-column cards above. */
+.tables-grid > .card {
+  min-width: 0;
+}
+
 @media (min-width: 600px) {
   .grid-2 {
     grid-template-columns: 1fr 1fr;
   }
 }
 
-@media (min-width: 900px) {
+/* Higher than the .page max-width (1140px) would suggest, because each
+   card needs room for the .transfer-table's own 460px min-width plus
+   card-body padding before splitting into two columns — otherwise the
+   Amount column gets condensed/clipped and the table falls back to its
+   own internal horizontal scroll. */
+@media (min-width: 1150px) {
   .tables-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -338,6 +433,26 @@ textarea {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Native <select> chrome (the OS-drawn dropdown arrow/height) otherwise
+   looks nothing like the plain text inputs and searchable comboboxes
+   (Department, Expense Account) sitting right next to it — this makes a
+   plain <select> like Activity of the Grant read as the same kind of
+   field instead of a visibly different browser widget. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23607184' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 0.85rem;
+}
+
+select:disabled {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a7b0bb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
 }
 
 textarea {
@@ -677,6 +792,51 @@ textarea:disabled {
   font-size: 1.05rem;
 }
 
+/* ---------- Grant Amendment auto-filled account preview ---------- */
+
+.account-preview {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.account-preview:last-child {
+  margin-bottom: 0;
+}
+
+.account-preview-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  margin-bottom: 0.35rem;
+}
+
+.account-preview-number {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.account-preview-desc {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+  min-height: 1.2em;
+}
+
+.account-preview-amount {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-line);
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+}
+
 /* ---------- Buttons ---------- */
 
 .btn {
@@ -945,6 +1105,134 @@ textarea:disabled {
   color: var(--color-green-3);
 }
 
+/* Rollforward's print view — one bordered block per line (see
+   rollforward.html's #printLines) instead of Transfer's side-by-side
+   tables, since Justification needs full-width room to read. Mirrors
+   Code.gs's buildRollforwardPdf() .rf-line block. */
+.print-rf-line {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.print-rf-line h2 {
+  font-size: 0.9rem;
+  color: var(--color-green-3);
+  margin: 0 0 0.3rem;
+}
+
+.print-justification {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+/* Grant Resolution — a dynamic version of the county's standard
+   resolution letterhead (see grant.html's #resolutionPrintView and
+   js/grant.js's populateResolutionView()). The source template is set
+   entirely in a serif face (not the app's Arial UI font), so the whole
+   view is scoped to var(--font-serif) rather than just the headings. */
+
+#resolutionPrintView {
+  font-family: var(--font-serif);
+  color: #000000;
+  font-size: 11pt;
+}
+
+.resolution-letterhead-title {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.resolution-letterhead-title h1 {
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.resolution-letterhead-title h2 {
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+.resolution-letterhead-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 9.5pt;
+  line-height: 1.35;
+}
+
+.resolution-commissioners {
+  text-align: left;
+}
+
+.resolution-seal {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  justify-self: center;
+}
+
+.resolution-address {
+  text-align: right;
+}
+
+.resolution-rule {
+  margin: 0.6rem 0 0.9rem;
+  border: none;
+  border-top: 1px solid #000000;
+}
+
+.resolution-number {
+  text-align: center;
+  font-weight: 700;
+  font-size: 11pt;
+  margin-bottom: 0.9rem;
+}
+
+.resolution-title {
+  text-align: justify;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 11pt;
+  line-height: 1.5;
+  margin: 0 auto 1.1rem;
+  max-width: 32rem;
+}
+
+.resolution-body {
+  font-size: 11pt;
+  line-height: 1.6;
+  text-align: justify;
+  text-indent: 2.5em;
+  margin-bottom: 0.9rem;
+}
+
+.resolution-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 2.5rem;
+  font-size: 11pt;
+}
+
+.resolution-sig-label {
+  font-weight: 700;
+  margin-bottom: 2.25rem;
+}
+
+.resolution-sig-line {
+  border-top: 1px solid #000000;
+  margin-bottom: 0.25rem;
+}
+
+.resolution-sig-name {
+  font-size: 10.5pt;
+}
+
 @media print {
   body {
     background: #ffffff;
@@ -959,7 +1247,10 @@ textarea:disabled {
   }
 
   .site-header,
-  #budgetForm {
+  .portal-page-heading,
+  #budgetForm,
+  #rollforwardForm,
+  #grantForm {
     display: none !important;
   }
 

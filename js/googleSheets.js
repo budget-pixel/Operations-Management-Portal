@@ -23,6 +23,32 @@ window.BudgetApp.GoogleSheets = (function () {
 
   var CACHE_KEY = 'budgetAppCoaCache_v1';
 
+  // Department codes to always drop from the Chart of Accounts, regardless
+  // of page — filtered out here (the single place every page's data passes
+  // through) so departments.js/accountSearch.js never see them. These are
+  // department.code values (e.g. "00101999"), not expense/revenue object
+  // codes — confirmed against the live COA data.
+  var EXCLUDED_DEPARTMENT_CODES = {
+    '00101999': true,
+    '0017010': true,
+    '00117020': true,
+    '10117010': true,
+    '10117020': true,
+    '00106010': true,
+    '00104020': true,
+    '00101002': true,
+    '10939001': true,
+    '00107011': true,
+    '00107010': true,
+    '00104010': true,
+  };
+
+  function stripExcludedDepartments(records) {
+    return (records || []).filter(function (r) {
+      return !EXCLUDED_DEPARTMENT_CODES[String(r && r.code || '').trim()];
+    });
+  }
+
   // Coalesces simultaneous callers (departments/expenses/revenue all load
   // at once on init) into a single in-flight network request.
   var pendingFetch = null;
@@ -82,6 +108,7 @@ window.BudgetApp.GoogleSheets = (function () {
         if (!looksValid) {
           throw new Error('Chart of Accounts response was missing expected data.');
         }
+        data.departments = stripExcludedDepartments(data.departments);
         writeCache(data);
         return data;
       });
@@ -90,7 +117,13 @@ window.BudgetApp.GoogleSheets = (function () {
   // Returns a Promise of { departments, expenses, revenue, fetchedAt }.
   function getData() {
     var cached = readCache();
-    if (cached) return Promise.resolve(cached);
+    if (cached) {
+      // Re-filter on read too, in case a tab's sessionStorage cache was
+      // written before EXCLUDED_DEPARTMENT_CODES picked up its current
+      // entries.
+      cached.departments = stripExcludedDepartments(cached.departments);
+      return Promise.resolve(cached);
+    }
 
     if (!pendingFetch) {
       pendingFetch = fetchFromSheets().then(

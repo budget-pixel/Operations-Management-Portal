@@ -10,16 +10,16 @@
    tables, just for a card-shaped line instead of a table row,
    since Justification needs a full-width textarea. Reuses the
    same underlying library modules (Calculations, GoogleSheets,
-   Departments, Expenses, AccountSearch, Validation, Submission)
+   Departments, Expenses, AccountSearch, Validation, Print, Submission)
    completely unchanged — no department search or account filtering
    logic is duplicated here.
 
    Depends on (must load first): Calculations, GoogleSheets,
-   Departments, Expenses, AccountSearch, Validation, Submission —
+   Departments, Expenses, AccountSearch, Validation, Print, Submission —
    see rollforward.html for load order.
    ============================================================= */
 
-(function (Calculations, GoogleSheets, Departments, Expenses, AccountSearch, Validation, Submission) {
+(function (Calculations, GoogleSheets, Departments, Expenses, AccountSearch, Validation, Print, Submission) {
   'use strict';
 
   // Add future years here — everything else (the <select>'s options,
@@ -35,8 +35,20 @@
   var statusBanner = document.getElementById('statusBanner');
 
   var submitBtn = document.getElementById('submitBtn');
+  var printBtn = document.getElementById('printBtn');
   var clearBtn = document.getElementById('clearBtn');
   var submitBtnDefaultLabel = submitBtn.textContent;
+
+  var printEls = {
+    date: document.getElementById('printDate'),
+    requesterName: document.getElementById('printRequesterName'),
+    title: document.getElementById('printTitle'),
+    requesterEmail: document.getElementById('printRequesterEmail'),
+    department: document.getElementById('printDepartment'),
+    fiscalYear: document.getElementById('printFiscalYear'),
+    lines: document.getElementById('printLines'),
+    linesTotal: document.getElementById('printLinesTotal'),
+  };
 
   var departmentInput = document.getElementById('departmentInput');
   var departmentClearBtn = departmentInput.parentElement.querySelector('.combobox-clear');
@@ -55,7 +67,9 @@
   var certificationErrorEl = document.getElementById('certification-error');
 
   var requiredFields = [
+    { input: document.getElementById('date'), error: document.getElementById('date-error'), message: 'Date is required.' },
     { input: document.getElementById('requesterName'), error: document.getElementById('requesterName-error'), message: 'Requester Name is required.' },
+    { input: document.getElementById('title'), error: document.getElementById('title-error'), message: 'Title is required.' },
   ];
   var requesterEmailInput = document.getElementById('requesterEmail');
   var requesterEmailErrorEl = document.getElementById('requesterEmail-error');
@@ -414,7 +428,9 @@
   function collectFormData() {
     return {
       requestType: 'rollforward',
+      date: document.getElementById('date').value,
       requesterName: document.getElementById('requesterName').value.trim(),
+      title: document.getElementById('title').value.trim(),
       requesterEmail: requesterEmailInput.value.trim(),
       department: selectedDepartment,
       fiscalYear: fiscalYearSelect.value,
@@ -429,6 +445,86 @@
         };
       }),
     };
+  }
+
+  // -----------------------------------------------------------
+  // Print view — a separate, compact clerical view (see #printView in
+  // rollforward.html), populated fresh from current form state right
+  // before printing. Only lines with a selected account are included.
+  // Mirrors app.js's populatePrintView()/populatePrintTable() for
+  // transfer.html, but renders one bordered block per line instead of a
+  // table, since Justification needs full-width room to read.
+  // -----------------------------------------------------------
+
+  function formatPrintDate(isoDate) {
+    if (!isoDate) return '—';
+    // Split/rearrange the "YYYY-MM-DD" string directly rather than going
+    // through `new Date(...)`, which parses that format as UTC midnight
+    // and can display a day off in negative-UTC-offset timezones.
+    var parts = isoDate.split('-');
+    return parts.length === 3 ? (parts[1] + '/' + parts[2] + '/' + parts[0]) : isoDate;
+  }
+
+  function populatePrintView() {
+    printEls.date.textContent = formatPrintDate(document.getElementById('date').value);
+    printEls.requesterName.textContent = document.getElementById('requesterName').value.trim() || '—';
+    printEls.title.textContent = document.getElementById('title').value.trim() || '—';
+    printEls.requesterEmail.textContent = requesterEmailInput.value.trim() || '—';
+    printEls.department.textContent = selectedDepartment
+      ? (selectedDepartment.code + ' - ' + selectedDepartment.name)
+      : '—';
+    printEls.fiscalYear.textContent = fiscalYearSelect.value || '—';
+
+    printEls.lines.innerHTML = '';
+    var filledLines = lines.filter(function (line) { return line.selectedAccount; });
+
+    filledLines.forEach(function (line, index) {
+      var account = line.selectedAccount;
+      var projCode = line.projectInput.value.trim();
+      var contractPo = line.contractPoInput.value.trim();
+      var amount = Calculations.parseAmount(line.amountInput.value);
+      var accountNumber = buildAccountNumber(account, projCode);
+
+      var block = document.createElement('div');
+      block.className = 'print-rf-line';
+
+      var heading = document.createElement('h2');
+      heading.textContent = 'Rollforward Request #' + (index + 1);
+      block.appendChild(heading);
+
+      function appendMetaRow(label, value) {
+        var row = document.createElement('div');
+        row.className = 'print-meta-row';
+        var labelEl = document.createElement('span');
+        labelEl.className = 'print-field-label';
+        labelEl.textContent = label + ':';
+        row.appendChild(labelEl);
+        row.appendChild(document.createTextNode(' ' + value));
+        block.appendChild(row);
+      }
+
+      appendMetaRow('Expense Account', accountNumber + (account.name ? ' - ' + account.name : ''));
+      if (projCode) appendMetaRow('Project Number', projCode);
+      if (contractPo) appendMetaRow('Contract or PO Number', contractPo);
+      appendMetaRow('Amount', Calculations.formatCurrency(amount));
+
+      var justificationLabel = document.createElement('div');
+      justificationLabel.className = 'print-meta-row';
+      var justificationLabelEl = document.createElement('span');
+      justificationLabelEl.className = 'print-field-label';
+      justificationLabelEl.textContent = 'Justification:';
+      justificationLabel.appendChild(justificationLabelEl);
+      block.appendChild(justificationLabel);
+
+      var justificationText = document.createElement('div');
+      justificationText.className = 'print-justification';
+      justificationText.textContent = line.justificationInput.value.trim();
+      block.appendChild(justificationText);
+
+      printEls.lines.appendChild(block);
+    });
+
+    printEls.linesTotal.textContent = linesTotalEl.textContent;
   }
 
   // -----------------------------------------------------------
@@ -460,7 +556,7 @@
   }
 
   function showSubmissionModal(requestId) {
-    submissionModalBody.textContent = 'Your Fiscal Year Rollforward Request has been submitted to the '
+    submissionModalBody.textContent = 'Your Rollforward Request has been submitted to the '
       + 'Office of Management and Budget. Request ID: ' + requestId;
     submissionModal.hidden = false;
     submissionModalCloseBtn.focus();
@@ -482,41 +578,29 @@
   // Chart of Accounts loading
   // -----------------------------------------------------------
 
-  function showCoaBanner(variant, text) {
-    coaStatusBanner.className = 'banner no-print ' + variant;
-    coaStatusBanner.innerHTML = '';
-    var span = document.createElement('span');
-    span.textContent = text;
-    coaStatusBanner.appendChild(span);
-    coaStatusBanner.hidden = false;
-    return span;
-  }
-
+  // Chart of Accounts status never renders on the page — it's only
+  // surfaced as a console.error in DevTools (Inspect -> Console), with
+  // BudgetApp.refreshChartOfAccounts() exposed there as the manual retry
+  // path since there's no on-page Refresh button anymore.
   function showCoaLoading() {
-    showCoaBanner('banner-info', 'Loading Chart of Accounts...');
+    coaStatusBanner.hidden = true;
   }
 
   function showCoaError(err) {
-    showCoaBanner('banner-error', err && err.message ? err.message : 'Could not load the Chart of Accounts.');
-    var retryBtn = document.createElement('button');
-    retryBtn.type = 'button';
-    retryBtn.className = 'btn btn-secondary';
-    retryBtn.textContent = 'Retry';
-    retryBtn.addEventListener('click', loadChartOfAccounts);
-    coaStatusBanner.appendChild(retryBtn);
+    coaStatusBanner.hidden = true;
+    console.error(
+      'Chart of Accounts: ' + (err && err.message ? err.message : 'Could not load the Chart of Accounts.')
+      + ' Run BudgetApp.refreshChartOfAccounts() in the console to retry.'
+    );
   }
 
   function showCoaLoaded(departmentCount, expenseCount) {
+    coaStatusBanner.hidden = true;
     var message = 'Chart of Accounts loaded — '
       + departmentCount + ' department' + (departmentCount === 1 ? '' : 's') + ', '
-      + expenseCount + ' expense account' + (expenseCount === 1 ? '' : 's') + '.';
-    showCoaBanner('banner-info', message);
-    var refreshBtn = document.createElement('button');
-    refreshBtn.type = 'button';
-    refreshBtn.className = 'btn btn-ghost';
-    refreshBtn.textContent = 'Refresh Chart of Accounts';
-    refreshBtn.addEventListener('click', handleRefreshCoa);
-    coaStatusBanner.appendChild(refreshBtn);
+      + expenseCount + ' expense account' + (expenseCount === 1 ? '' : 's') + '.'
+      + ' Run BudgetApp.refreshChartOfAccounts() in the console to refresh.';
+    console.error(message);
   }
 
   function handleRefreshCoa() {
@@ -578,6 +662,11 @@
       });
   });
 
+  printBtn.addEventListener('click', function () {
+    populatePrintView();
+    Print.printForm();
+  });
+
   clearBtn.addEventListener('click', function () {
     var confirmed = window.confirm('Clear the form? Any unsaved changes will be lost.');
     if (!confirmed) return;
@@ -602,6 +691,8 @@
 
   addLine();
   loadChartOfAccounts();
+
+  window.BudgetApp.refreshChartOfAccounts = handleRefreshCoa;
 })(
   window.BudgetApp.Calculations,
   window.BudgetApp.GoogleSheets,
@@ -609,5 +700,6 @@
   window.BudgetApp.Expenses,
   window.BudgetApp.AccountSearch,
   window.BudgetApp.Validation,
+  window.BudgetApp.Print,
   window.BudgetApp.Submission
 );

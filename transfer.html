@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Budget Amendment Request</title>
+  <meta name="theme-color" content="#003e28" />
+  <title>Budget Request</title>
   <meta name="description" content="Submit and manage budget amendment / transfer requests." />
   <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body data-page="transfer">
 
-  <header class="site-header">
+  <header class="site-header no-print">
     <div class="header-inner">
-      <div class="brand">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
         <span class="brand-seal">
           <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
         </span>
@@ -20,14 +21,23 @@
           <span class="brand-top">Walton County</span>
           <span class="brand-bottom">Board of County Commissioners</span>
         </span>
-      </div>
-      <h1 class="page-title">Budget Amendment Request</h1>
+      </a>
+      <nav id="siteNav" aria-label="Budget Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </header>
 
-  <nav id="siteNav"></nav>
-
   <main class="page">
+
+    <div class="portal-page-heading">
+      <div class="page-eyebrow">Budget Management Portal</div>
+      <div class="portal-page-heading-row">
+        <h1>Budget Request</h1>
+        <button type="button" id="clearBtn" class="btn btn-danger no-print">Clear Form</button>
+      </div>
+    </div>
 
     <!-- Chart of Accounts load status (loading / error / loaded+refresh) -->
     <div id="coaStatusBanner" class="banner banner-info no-print" hidden></div>
@@ -64,7 +74,7 @@
 
           <div class="grid-2">
             <div class="field">
-              <label for="preparedBy">Prepared By (BY) <span class="required">*</span></label>
+              <label for="preparedBy">Prepared By <span class="required">*</span></label>
               <input type="text" id="preparedBy" name="preparedBy" maxlength="50" required />
               <p class="error-text" id="preparedBy-error"></p>
             </div>
@@ -88,7 +98,7 @@
            required (see js/app.js's validateForm()) since there's nothing
            else to choose; its department-mode wiring (js/amendmentRules.js,
            'single' mode) is unchanged. -->
-      <section class="card">
+      <section class="card" hidden>
         <h2 class="section-title">This Request Will Require A</h2>
         <div class="card-body">
           <div class="radio-group" role="radiogroup" aria-describedby="amendmentType-error">
@@ -175,10 +185,8 @@
 
       <!-- Actions -->
       <div class="actions no-print">
-        <button type="submit" id="submitBtn" class="btn btn-primary">Submit Budget Transfer Request</button>
-        <button type="button" id="saveDraftBtn" class="btn btn-secondary">Save Draft</button>
+        <button type="submit" id="submitBtn" class="btn btn-primary">Submit Budget Request</button>
         <button type="button" id="printBtn" class="btn btn-secondary">Print Form</button>
-        <button type="button" id="clearBtn" class="btn btn-danger">Clear Form</button>
       </div>
 
     </form>
@@ -193,7 +201,7 @@
       <div class="print-header">
         <img class="print-seal" src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
         <div>
-          <h1>Budget Amendment Request</h1>
+          <h1>Budget Request</h1>
           <div class="print-meta-row">
             <span><span class="print-field-label">Date:</span> <span id="printDate"></span></span>
             <span><span class="print-field-label">Prepared By:</span> <span id="printPreparedBy"></span></span>

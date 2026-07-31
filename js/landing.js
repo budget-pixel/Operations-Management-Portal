@@ -19,13 +19,19 @@ window.BudgetApp.Landing = (function () {
   // links to, and its button label. Nothing else needs to change.
   var REQUEST_TYPES = [
     {
-      title: 'Budget Transfer / Amendment Request',
+      title: 'Budget Request',
       description: 'Transfer existing budget between accounts or amend the current fiscal year budget.',
       href: 'transfer.html',
-      buttonLabel: 'Start Budget Transfer',
+      buttonLabel: 'Start Budget Request',
     },
     {
-      title: 'Fiscal Year Rollforward Request',
+      title: 'Grant Amendment Request',
+      description: 'Submit a grant amendment — revenue and expense accounts are auto-filled from the grant’s source and activity.',
+      href: 'grant.html',
+      buttonLabel: 'Start Grant Amendment Request',
+    },
+    {
+      title: 'Rollforward Request',
       description: 'Request authorization to roll unspent budget into the next fiscal year.',
       href: 'rollforward.html',
       buttonLabel: 'Start Rollforward Request',

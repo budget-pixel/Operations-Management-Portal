@@ -1,11 +1,11 @@
 /* =============================================================
    nav.js
-   Renders the shared portal navigation (Home / Budget Transfer /
-   Rollforward Request) into a page's <nav id="siteNav">, with the
-   current page highlighted. One source of truth for the nav
-   markup instead of copy-pasting it into every page.
+   Renders the shared portal navigation (Home / Budget Request / Grant
+   Amendment Request / Rollforward Request) into a page's
+   <nav id="siteNav">, with the current page highlighted. One source of
+   truth for the nav markup instead of copy-pasting it into every page.
 
-   Each page sets <body data-page="home|transfer|rollforward"> so
+   Each page sets <body data-page="home|transfer|grant|rollforward"> so
    this module knows which link to mark active.
 
    Exposes: window.BudgetApp.Nav
@@ -18,7 +18,8 @@ window.BudgetApp.Nav = (function () {
 
   var LINKS = [
     { page: 'home', href: 'index.html', label: 'Home' },
-    { page: 'transfer', href: 'transfer.html', label: 'Budget Transfer' },
+    { page: 'transfer', href: 'transfer.html', label: 'Budget Request' },
+    { page: 'grant', href: 'grant.html', label: 'Grant Amendment Request' },
     { page: 'rollforward', href: 'rollforward.html', label: 'Rollforward Request' },
   ];
 
@@ -29,8 +30,7 @@ window.BudgetApp.Nav = (function () {
     var currentPage = document.body.dataset.page;
 
     navEl.innerHTML = '';
-    navEl.className = 'site-nav no-print';
-    navEl.setAttribute('aria-label', 'Budget Management Portal');
+    navEl.className = 'site-nav';
 
     LINKS.forEach(function (link) {
       var a = document.createElement('a');
@@ -42,6 +42,17 @@ window.BudgetApp.Nav = (function () {
       }
       navEl.appendChild(a);
     });
+
+    var toggle = document.querySelector('.nav-menu-toggle');
+    var header = document.querySelector('.site-header');
+    if (toggle && header) {
+      toggle.addEventListener('click', function () {
+        var open = !header.classList.contains('is-menu-open');
+        header.classList.toggle('is-menu-open', open);
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+      });
+    }
   }
 
   render();

@@ -50,7 +50,6 @@
   var statusBanner = document.getElementById('statusBanner');
 
   var submitBtn = document.getElementById('submitBtn');
-  var saveDraftBtn = document.getElementById('saveDraftBtn');
   var printBtn = document.getElementById('printBtn');
   var clearBtn = document.getElementById('clearBtn');
 
@@ -717,7 +716,7 @@
   // Pop-up shown once the server accepts a submission — replaces the old
   // inline banner confirmation so the Request ID is impossible to miss.
   function showSubmissionModal(requestId) {
-    submissionModalBody.textContent = 'Your Budget Transfer Request has been submitted to the '
+    submissionModalBody.textContent = 'Your Budget Request has been submitted to the '
       + 'Office of Management and Budget. Request ID: ' + requestId;
     submissionModal.hidden = false;
     submissionModalCloseBtn.focus();
@@ -735,49 +734,37 @@
     }
   });
 
-  function showCoaBanner(variant, text) {
-    coaStatusBanner.className = 'banner no-print ' + variant;
-    coaStatusBanner.innerHTML = '';
-    var span = document.createElement('span');
-    span.textContent = text;
-    coaStatusBanner.appendChild(span);
-    coaStatusBanner.hidden = false;
-    return span;
-  }
-
+  // Chart of Accounts status never renders on the page — it's only
+  // surfaced as a console.error in DevTools (Inspect -> Console), with
+  // BudgetApp.refreshChartOfAccounts() exposed there as the manual retry
+  // path since there's no on-page Refresh button anymore.
   function showCoaLoading() {
-    showCoaBanner('banner-info', 'Loading Chart of Accounts...');
+    coaStatusBanner.hidden = true;
   }
 
   function showCoaError(err) {
-    showCoaBanner('banner-error', err && err.message ? err.message : 'Could not load the Chart of Accounts.');
-    var retryBtn = document.createElement('button');
-    retryBtn.type = 'button';
-    retryBtn.className = 'btn btn-secondary';
-    retryBtn.textContent = 'Retry';
-    retryBtn.addEventListener('click', loadChartOfAccounts);
-    coaStatusBanner.appendChild(retryBtn);
+    coaStatusBanner.hidden = true;
+    console.error(
+      'Chart of Accounts: ' + (err && err.message ? err.message : 'Could not load the Chart of Accounts.')
+      + ' Run BudgetApp.refreshChartOfAccounts() in the console to retry.'
+    );
   }
 
-  // Counts are shown so a "department has zero accounts" data problem is
-  // visually distinguishable from a "nothing loaded at all" plumbing
-  // problem, without needing to open DevTools. The project-code count in
-  // particular tells you whether Code.gs's Project column mapping actually
-  // made it into what the client has, independent of any specific search.
+  // Counts are logged so a "department has zero accounts" data problem is
+  // distinguishable from a "nothing loaded at all" plumbing problem. The
+  // project-code count in particular tells you whether Code.gs's Project
+  // column mapping actually made it into what the client has, independent
+  // of any specific search.
   function showCoaLoaded(departmentCount, expenseCount, revenueCount) {
+    coaStatusBanner.hidden = true;
     var projectCount = Expenses.getAll().filter(function (account) { return account.projectCode; }).length;
     var message = 'Chart of Accounts loaded — '
       + departmentCount + ' department' + (departmentCount === 1 ? '' : 's') + ', '
       + expenseCount + ' expense account' + (expenseCount === 1 ? '' : 's')
       + ' (' + projectCount + ' with a project code), '
-      + revenueCount + ' revenue account' + (revenueCount === 1 ? '' : 's') + '.';
-    showCoaBanner('banner-info', message);
-    var refreshBtn = document.createElement('button');
-    refreshBtn.type = 'button';
-    refreshBtn.className = 'btn btn-ghost';
-    refreshBtn.textContent = 'Refresh Chart of Accounts';
-    refreshBtn.addEventListener('click', handleRefreshCoa);
-    coaStatusBanner.appendChild(refreshBtn);
+      + revenueCount + ' revenue account' + (revenueCount === 1 ? '' : 's') + '.'
+      + ' Run BudgetApp.refreshChartOfAccounts() in the console to refresh.';
+    console.error(message);
   }
 
   // Logs the raw Chart of Accounts payload to the browser console (DevTools
@@ -964,11 +951,6 @@
       });
   });
 
-  saveDraftBtn.addEventListener('click', function () {
-    Storage.saveDraft(collectFormData());
-    showStatus('banner-info', 'Draft saved at ' + new Date().toLocaleTimeString() + '.');
-  });
-
   printBtn.addEventListener('click', function () {
     populatePrintView();
     Print.printForm();
@@ -1026,6 +1008,8 @@
   }
 
   init();
+
+  window.BudgetApp.refreshChartOfAccounts = handleRefreshCoa;
 })(
   window.BudgetApp.Calculations,
   window.BudgetApp.Storage,

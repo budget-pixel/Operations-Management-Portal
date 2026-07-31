@@ -5,16 +5,17 @@
  * Paste this entire file into the Apps Script editor of a script bound to
  * your Chart of Accounts spreadsheet (Extensions -> Apps Script). It reads
  * the COA tabs for the website's dropdowns (doGet) and, separately, receives
- * completed submissions from BOTH portal workflows through the same
- * deployment (doPost): the Budget Transfer / Amendment Request and the
- * Fiscal Year Rollforward Request. doPost branches on the payload's
- * `requestType` field ('rollforward', or anything else treated as a
- * Transfer submission for backward compatibility) — see
- * handleTransferSubmission()/handleRollforwardSubmission() below. Each
- * generates its own PDF, records its own request in its own worksheet(s),
- * and emails the PDF to Budget Office staff. PDFs are never saved anywhere
- * (no Google Drive) — each exists only in memory for as long as it takes to
- * attach it to that outgoing email.
+ * completed submissions from ALL THREE portal workflows through the same
+ * deployment (doPost): the Budget Request, the Grant Amendment Request,
+ * and the Rollforward Request. doPost branches on the payload's
+ * `requestType` field ('grant', 'rollforward', or anything else treated
+ * as a Budget Request submission for backward compatibility) — see
+ * handleTransferSubmission()/handleGrantSubmission()/
+ * handleRollforwardSubmission() below. Each generates its own PDF,
+ * records its own request in its own worksheet(s), and emails the PDF to
+ * Budget Office staff. PDFs are never saved anywhere (no Google Drive) —
+ * each exists only in memory for as long as it takes to attach it to that
+ * outgoing email.
  *
  * Expected tabs and exact header row text:
  *
@@ -25,6 +26,7 @@
  *   "Budget Transfer Requests" one row per submitted Transfer request (see appendRequestRow())
  *   "Budget Transfer Lines"    one row per Transfer From/To line (see appendLineRows())
  *   "Rollforward Requests"     one row per account within a Rollforward request (see appendRollforwardRows())
+ *   "Grant Amendment Requests" one row per submitted Grant Amendment request (see appendGrantRequestRow())
  *
  * COA Expenses and COA Revenue don't carry a department *name* column, only
  * a code (Department Code / Org Code) — departmentName comes back blank for
@@ -208,6 +210,24 @@ var DEPARTMENT_MODE_BY_TYPE = {
   publicHearing: 'dual',
 };
 
+// Grant Amendment Request category -> expense object code. Mirrors
+// js/grant.js's CATEGORY_OBJECT_CODES.
+var GRANT_CATEGORY_OBJECT_CODES = {
+  equipment: '564000',
+  construction: '563000',
+  design: '531000',
+  salaries: '512000',
+  other: '534000',
+};
+
+// Grant Amendment Request source -> Florida Accounting Manual revenue
+// series (331 Federal Grants, 334 State Grants). Mirrors js/grant.js's
+// GRANT_TYPE_CODES.
+var GRANT_TYPE_CODES = {
+  federal: '331',
+  state: '334',
+};
+
 /**
  * Handles a submitted request from either portal workflow.
  *
@@ -234,6 +254,9 @@ function doPost(e) {
     if (requestData && requestData.requestType === 'rollforward') {
       return jsonResponse(handleRollforwardSubmission(ss, requestData));
     }
+    if (requestData && requestData.requestType === 'grant') {
+      return jsonResponse(handleGrantSubmission(ss, requestData));
+    }
     return jsonResponse(handleTransferSubmission(ss, requestData));
   } catch (err) {
     // Full stack goes to the Apps Script execution log (Executions tab)
@@ -244,7 +267,7 @@ function doPost(e) {
 }
 
 /**
- * Handles a Budget Transfer / Amendment Request submission. Behavior is
+ * Handles a Budget Request submission. Behavior is
  * unchanged from before doPost supported multiple request types — only
  * moved into its own function so doPost can dispatch to it.
  *
@@ -286,7 +309,7 @@ function handleTransferSubmission(ss, requestData) {
 }
 
 /**
- * Handles a Fiscal Year Rollforward Request submission — the second portal
+ * Handles a Rollforward Request submission — the second portal
  * workflow, added alongside Transfer without touching any of its code. A
  * submission can carry one or more accounts (requestData.lines), each with
  * its own Expense Account, Amount, and Justification, all sharing one
@@ -332,6 +355,47 @@ function sumRollforwardLineAmounts(lines) {
     var amount = parseFloat(line && line.amount);
     return sum + (isFinite(amount) ? amount : 0);
   }, 0);
+}
+
+/**
+ * Handles a Grant Amendment Request submission — the third portal
+ * workflow. Unlike Transfer/Rollforward, the Revenue and Expense
+ * accounts are never searched from the Chart of Accounts; they're
+ * computed here from Grant Source + Activity + Department + Category
+ * (see buildGrantAccountNumbers()), independent of whatever account
+ * number strings the client may have sent — same "server recomputes,
+ * never trusts a client-built composite" principle buildTransferLines()
+ * already follows for Transfer.
+ *
+ * Input: the spreadsheet, and the parsed request payload (see
+ * js/grant.js's collectFormData()).
+ * Output: { success: true, requestId } or { success: false, error }.
+ */
+function handleGrantSubmission(ss, requestData) {
+  var validationErrors = validateGrantSubmission(requestData);
+  if (validationErrors.length > 0) {
+    return { success: false, error: validationErrors.join(' ') };
+  }
+
+  var settings = getSettings(ss);
+  var requestId = generateRequestId(ss, 'Grant Amendment Requests', 'GR-' + settings.FiscalYear + '-', 4, 0);
+  var timestamp = new Date();
+  var amount = parseFloat(requestData.amount) || 0;
+  var accounts = buildGrantAccountNumbers(requestData);
+
+  var pdfBlob = buildGrantPdf(requestData, requestId, timestamp, accounts, amount);
+
+  appendGrantRequestRow(ss, {
+    requestId: requestId,
+    timestamp: timestamp,
+    requestData: requestData,
+    accounts: accounts,
+    amount: amount,
+  });
+
+  sendGrantNotification(settings, requestData, requestId, timestamp, accounts, amount, pdfBlob);
+
+  return { success: true, requestId: requestId };
 }
 
 // ---------- Settings ----------
@@ -526,10 +590,16 @@ function validateRollforwardSubmission(data) {
   if (!data || typeof data !== 'object') {
     return ['Malformed request payload.'];
   }
+  if (!data.date) errors.push('Date is required.');
   if (!data.requesterName) {
     errors.push('Requester Name is required.');
   } else if (!isValidLength(data.requesterName, 50)) {
     errors.push('Requester Name must be 50 characters or fewer.');
+  }
+  if (!data.title) {
+    errors.push('Title is required.');
+  } else if (!isValidLength(data.title, 50)) {
+    errors.push('Title must be 50 characters or fewer.');
   }
   if (!data.requesterEmail || !isValidEmailFormat(data.requesterEmail)) {
     errors.push('A valid Requester Email is required.');
@@ -564,6 +634,103 @@ function validateRollforwardSubmission(data) {
   });
 
   return errors;
+}
+
+/**
+ * Re-validates a Grant Amendment submission server-side — mirrors
+ * validateSubmission()/validateRollforwardSubmission()'s style/purpose.
+ *
+ * Input: the parsed request payload.
+ * Output: an array of human-readable error strings (empty = valid).
+ */
+function validateGrantSubmission(data) {
+  var errors = [];
+
+  if (!data || typeof data !== 'object') {
+    return ['Malformed request payload.'];
+  }
+  if (!data.preparedBy) {
+    errors.push('Prepared By is required.');
+  } else if (!isValidLength(data.preparedBy, 50)) {
+    errors.push('Prepared By must be 50 characters or fewer.');
+  }
+  if (!data.title) {
+    errors.push('Title is required.');
+  } else if (!isValidLength(data.title, 50)) {
+    errors.push('Title must be 50 characters or fewer.');
+  }
+  if (!data.requestorEmail || !isValidEmailFormat(data.requestorEmail)) {
+    errors.push('A valid Requestor Email Address is required.');
+  } else if (!isValidLength(data.requestorEmail, 50)) {
+    errors.push('Requestor Email Address must be 50 characters or fewer.');
+  }
+  if (!data.grantSource || !GRANT_TYPE_CODES[data.grantSource]) {
+    errors.push('A valid Grant Source (Federal or State) is required.');
+  }
+  if (!data.activityCode || !/^[0-9]{3}$/.test(data.activityCode)) {
+    errors.push('A valid grant Activity is required.');
+  }
+  if (!data.grantingAgency) {
+    errors.push('Granting Agency is required.');
+  } else if (!isValidLength(data.grantingAgency, 120)) {
+    errors.push('Granting Agency must be 120 characters or fewer.');
+  }
+  if (!data.grantProgramName) {
+    errors.push('Grant Program Name is required.');
+  } else if (!isValidLength(data.grantProgramName, 150)) {
+    errors.push('Grant Program Name must be 150 characters or fewer.');
+  }
+  if (!data.boardApprovalDate) {
+    errors.push('The date the Board will approve the grant agreement is required.');
+  }
+  if (!data.department || !data.department.code) errors.push('Department is required.');
+  if (!data.category || !GRANT_CATEGORY_OBJECT_CODES[data.category]) {
+    errors.push('A valid amendment Category (Equipment, Construction, Design, Salaries, or Other) is required.');
+  }
+  if (!isValidAmountValue(data.amount)) {
+    errors.push('A valid Amount between 0.01 and ' + formatCurrency(MAX_AMOUNT) + ' is required.');
+  }
+  if (data.grantNumber && !/^[0-9]{5}$/.test(data.grantNumber)) {
+    errors.push('Grant Number must be a 5-digit number.');
+  }
+
+  return errors;
+}
+
+// ---------- Grant Amendment accounts (shared by the Sheets writer and the PDF) ----------
+
+/**
+ * Computes the Revenue and Expense account numbers for a Grant Amendment
+ * Request from Grant Source + Activity + Department + Category —
+ * recomputed here from the raw inputs rather than trusting any
+ * account-number string the client may have sent, same principle
+ * buildTransferLines() follows for Transfer. Mirrors js/grant.js's
+ * buildRevenueAccountNumber()/buildExpenseAccountNumber() exactly.
+ *
+ * Output: { revenueAccountNumber, expenseAccountNumber } — either may be
+ * an empty string if the inputs needed to build it are missing/invalid
+ * (validateGrantSubmission() should already have rejected that case).
+ */
+function buildGrantAccountNumbers(data) {
+  var department = data.department || {};
+  var grantNumber = data.grantNumber || '';
+
+  var typeCode = GRANT_TYPE_CODES[data.grantSource];
+  var revenueAccountNumber = '';
+  if (typeCode && data.activityCode && department.code) {
+    var fund = String(department.code).slice(0, 3);
+    var revenueDeptCode = fund + typeCode;
+    var revenueObjectCode = typeCode + data.activityCode;
+    revenueAccountNumber = [revenueDeptCode, revenueObjectCode, grantNumber].filter(Boolean).join('-');
+  }
+
+  var objectCode = GRANT_CATEGORY_OBJECT_CODES[data.category];
+  var expenseAccountNumber = '';
+  if (objectCode && department.code) {
+    expenseAccountNumber = [department.code, objectCode, grantNumber].filter(Boolean).join('-');
+  }
+
+  return { revenueAccountNumber: revenueAccountNumber, expenseAccountNumber: expenseAccountNumber };
 }
 
 // ---------- Transfer lines (shared by the Sheets writer and the PDF) ----------
@@ -759,10 +926,13 @@ function appendLineRows(ss, requestId, lines) {
  * Columns, in order: Timestamp, Request ID, Requester Name, Requester
  * Email, Department Code, Department Name, Expense Account, Project
  * Number, Contract or PO Number, Amount, Fiscal Year, Justification,
- * Status, Submitted By.
+ * Status, Submitted By, Request Date, Title.
  *
  * "Submitted By" is populated with the same Requester Name — this form
- * has no separate submitter identity from the requester.
+ * has no separate submitter identity from the requester. Request Date and
+ * Title are appended at the end (rather than inline near Requester Name)
+ * so an existing "Rollforward Requests" sheet only needs two new trailing
+ * columns added, not a full reorder.
  */
 function appendRollforwardRows(ss, params) {
   var sheet = ss.getSheetByName('Rollforward Requests');
@@ -795,10 +965,56 @@ function appendRollforwardRows(ss, params) {
       line.justification || '',
       'Submitted',
       data.requesterName || '',
+      data.date || '',
+      data.title || '',
     ];
   });
 
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+/**
+ * Appends one row to "Grant Amendment Requests" — one row per request
+ * (unlike Rollforward, a Grant Amendment always has exactly one Revenue
+ * line and one Expense line, so both fit on the same row instead of
+ * needing a separate lines sheet).
+ * Columns, in order: Request ID, Timestamp, Prepared By, Title,
+ * Requestor Email, Grant Source, Activity Code, Activity Label,
+ * Department Code, Department Name, Category, Revenue Account, Expense
+ * Account, Amount, Grant Number, Status, Granting Agency, Grant Program
+ * Name, Board Approval Date.
+ */
+function appendGrantRequestRow(ss, params) {
+  var sheet = ss.getSheetByName('Grant Amendment Requests');
+  if (!sheet) {
+    throw new Error('Sheet not found: "Grant Amendment Requests".');
+  }
+
+  var data = params.requestData;
+  var department = data.department || {};
+  var accounts = params.accounts;
+
+  sheet.appendRow([
+    params.requestId,
+    params.timestamp,
+    data.preparedBy || '',
+    data.title || '',
+    data.requestorEmail || '',
+    data.grantSource === 'federal' ? 'Federal' : 'State',
+    data.activityCode || '',
+    data.activityLabel || '',
+    department.code || '',
+    department.name || '',
+    data.category || '',
+    accounts.revenueAccountNumber,
+    accounts.expenseAccountNumber,
+    params.amount,
+    data.grantNumber || '',
+    'Submitted',
+    data.grantingAgency || '',
+    data.grantProgramName || '',
+    data.boardApprovalDate || '',
+  ]);
 }
 
 // ---------- PDF ----------
@@ -844,7 +1060,7 @@ function buildRequestHtml(data, requestId, timestamp, lines, totalAmount) {
   var css = buildPdfCss();
 
   return '<html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>'
-    + '<h1>Budget Amendment Request</h1>'
+    + '<h1>Budget Request</h1>'
     + '<div class="meta"><b>Request ID:</b> ' + escapeHtml(requestId) + '</div>'
     + '<div class="meta"><b>Date:</b> ' + escapeHtml(formatDateForDisplay(data.date))
       + '&nbsp;&nbsp;&nbsp;<b>Prepared By:</b> ' + escapeHtml(data.preparedBy || '')
@@ -943,15 +1159,68 @@ function buildRollforwardHtml(data, requestId, timestamp, lines, totalAmount) {
   }).join('');
 
   return '<html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>'
-    + '<h1>Fiscal Year Rollforward Request</h1>'
+    + '<h1>Rollforward Request</h1>'
     + '<div class="meta"><b>Request ID:</b> ' + escapeHtml(requestId) + '</div>'
-    + '<div class="meta"><b>Date:</b> ' + escapeHtml(formatTimestampForEmail(timestamp)) + '</div>'
-    + '<div class="meta"><b>Requester Name:</b> ' + escapeHtml(data.requesterName || '')
-      + '&nbsp;&nbsp;&nbsp;<b>Requester Email:</b> ' + escapeHtml(data.requesterEmail || '') + '</div>'
+    + '<div class="meta"><b>Date:</b> ' + escapeHtml(formatDateForDisplay(data.date))
+      + '&nbsp;&nbsp;&nbsp;<b>Requester Name:</b> ' + escapeHtml(data.requesterName || '')
+      + '&nbsp;&nbsp;&nbsp;<b>Title:</b> ' + escapeHtml(data.title || '') + '</div>'
+    + '<div class="meta"><b>Requester Email:</b> ' + escapeHtml(data.requesterEmail || '') + '</div>'
     + '<div class="meta"><b>Department:</b> ' + escapeHtml(formatDepartmentForDisplay(department)) + '</div>'
     + '<div class="meta"><b>Fiscal Year:</b> ' + escapeHtml(data.fiscalYear || '') + '</div>'
     + linesHtml
     + '<div class="total">Total Amount Requested to Roll Forward: ' + formatCurrency(totalAmount) + '</div>'
+    + '</body></html>';
+}
+
+/**
+ * Builds the Grant Amendment Request PDF blob, attached to the county
+ * notification email. Mirrors buildRequestPdf()/buildRollforwardPdf()'s
+ * shape — a single blob, never written to Drive, that exists only for
+ * the lifetime of this request.
+ */
+function buildGrantPdf(data, requestId, timestamp, accounts, amount) {
+  var html = buildGrantHtml(data, requestId, timestamp, accounts, amount);
+  var htmlBlob = Utilities.newBlob(html, 'text/html', 'grant.html');
+  var pdfBlob = htmlBlob.getAs('application/pdf');
+  pdfBlob.setName('Grant-Amendment-Request-' + requestId + '.pdf');
+  return pdfBlob;
+}
+
+function buildGrantHtml(data, requestId, timestamp, accounts, amount) {
+  var department = data.department || {};
+  var css = buildPdfCss();
+  var grantSourceLabel = data.grantSource === 'federal' ? 'Federal Grant' : 'State Grant';
+  var typeCode = GRANT_TYPE_CODES[data.grantSource] || '';
+  var activityDisplay = typeCode && data.activityCode
+    ? (typeCode + '.' + data.activityCode + (data.activityLabel ? ' — ' + data.activityLabel : ''))
+    : '';
+  var categoryLabels = {
+    equipment: 'Equipment', construction: 'Construction', design: 'Design',
+    salaries: 'Salaries', other: 'Other',
+  };
+
+  return '<html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>'
+    + '<h1>Grant Amendment Request</h1>'
+    + '<div class="meta"><b>Request ID:</b> ' + escapeHtml(requestId) + '</div>'
+    + '<div class="meta"><b>Prepared By:</b> ' + escapeHtml(data.preparedBy || '')
+      + '&nbsp;&nbsp;&nbsp;<b>Title:</b> ' + escapeHtml(data.title || '') + '</div>'
+    + '<div class="meta"><b>Requestor Email:</b> ' + escapeHtml(data.requestorEmail || '') + '</div>'
+    + '<div class="meta"><b>Grant Source:</b> ' + escapeHtml(grantSourceLabel)
+      + '&nbsp;&nbsp;&nbsp;<b>Activity:</b> ' + escapeHtml(activityDisplay) + '</div>'
+    + '<div class="meta"><b>Department:</b> ' + escapeHtml(formatDepartmentForDisplay(department)) + '</div>'
+    + '<div class="meta"><b>Category:</b> ' + escapeHtml(categoryLabels[data.category] || '')
+      + '&nbsp;&nbsp;&nbsp;<b>Grant Number:</b> ' + escapeHtml(data.grantNumber || '—') + '</div>'
+    + '<div class="meta"><b>Granting Agency:</b> ' + escapeHtml(data.grantingAgency || '') + '</div>'
+    + '<div class="meta"><b>Grant Program:</b> ' + escapeHtml(data.grantProgramName || '') + '</div>'
+    + '<div class="meta"><b>Board Approval Date:</b> ' + escapeHtml(formatDateForDisplay(data.boardApprovalDate)) + '</div>'
+    + '<div class="tables">'
+    + '<div class="table-col"><h2>Revenue Account</h2>'
+      + '<div class="meta">' + escapeHtml(accounts.revenueAccountNumber) + '</div>'
+      + '<div class="total">Amount: ' + formatCurrency(amount) + '</div></div>'
+    + '<div class="table-col"><h2>Expense Account</h2>'
+      + '<div class="meta">' + escapeHtml(accounts.expenseAccountNumber) + '</div>'
+      + '<div class="total">Amount: ' + formatCurrency(amount) + '</div></div>'
+    + '</div>'
     + '</body></html>';
 }
 
@@ -969,7 +1238,7 @@ function sendCountyNotification(settings, data, requestId, timestamp, totalAmoun
   var mode = getDepartmentModeForType(data.amendmentType);
   var department = mode === 'single' ? data.department : data.departmentFrom;
 
-  var body = 'A Budget Transfer Request has been submitted.\n\n'
+  var body = 'A Budget Request has been submitted.\n\n'
     + 'Request ID:\n' + requestId + '\n\n'
     + 'Department:\n' + (department ? department.name : '—') + '\n\n'
     + 'Amendment Type:\n' + (AMENDMENT_TYPE_LABELS[data.amendmentType] || '') + '\n\n'
@@ -977,11 +1246,11 @@ function sendCountyNotification(settings, data, requestId, timestamp, totalAmoun
     + 'Submitted By:\n' + (data.preparedBy || '') + '\n\n'
     + 'Requestor Email:\n' + (data.requestorEmail || '') + '\n\n'
     + 'Submission Date:\n' + formatTimestampForEmail(timestamp) + '\n\n'
-    + 'The completed Budget Transfer Request is attached.';
+    + 'The completed Budget Request is attached.';
 
   MailApp.sendEmail({
     to: settings.NotificationEmails.join(','),
-    subject: 'Budget Transfer Request Submitted – Request #' + requestId,
+    subject: 'Budget Request Submitted – Request #' + requestId,
     body: body,
     attachments: [pdfBlob],
   });
@@ -1000,20 +1269,64 @@ function sendRollforwardNotification(settings, data, requestId, timestamp, lines
 
   var department = data.department || {};
 
-  var body = 'A Fiscal Year Rollforward Request has been submitted.\n\n'
+  var body = 'A Rollforward Request has been submitted.\n\n'
     + 'Request ID:\n' + requestId + '\n\n'
+    + 'Date:\n' + formatDateForDisplay(data.date) + '\n\n'
     + 'Department:\n' + (department.name || '—') + '\n\n'
     + 'Number of Accounts:\n' + lines.length + '\n\n'
     + 'Total Amount Requested to Roll Forward:\n' + formatCurrency(totalAmount) + '\n\n'
     + 'Fiscal Year:\n' + (data.fiscalYear || '') + '\n\n'
     + 'Requester:\n' + (data.requesterName || '') + '\n\n'
+    + 'Title:\n' + (data.title || '') + '\n\n'
     + 'Requester Email:\n' + (data.requesterEmail || '') + '\n\n'
     + 'Submission Date:\n' + formatTimestampForEmail(timestamp) + '\n\n'
     + 'See the attached PDF for the account-by-account amounts and justifications.';
 
   MailApp.sendEmail({
     to: settings.NotificationEmails.join(','),
-    subject: 'Fiscal Year Rollforward Request Submitted – Request #' + requestId,
+    subject: 'Rollforward Request Submitted – Request #' + requestId,
+    body: body,
+    attachments: [pdfBlob],
+  });
+}
+
+/**
+ * Emails the submitted Grant Amendment request's PDF to every address in
+ * Settings!NotificationEmails — mirrors sendCountyNotification()'s/
+ * sendRollforwardNotification()'s shape. Only the county notification
+ * sends; the requester is not emailed.
+ */
+function sendGrantNotification(settings, data, requestId, timestamp, accounts, amount, pdfBlob) {
+  if (settings.NotificationEmails.length === 0) return;
+
+  var department = data.department || {};
+  var grantSourceLabel = data.grantSource === 'federal' ? 'Federal' : 'State';
+  var typeCode = GRANT_TYPE_CODES[data.grantSource] || '';
+  var activityDisplay = typeCode && data.activityCode
+    ? (typeCode + '.' + data.activityCode + (data.activityLabel ? ' — ' + data.activityLabel : ''))
+    : '';
+
+  var body = 'A Grant Amendment Request has been submitted.\n\n'
+    + 'Request ID:\n' + requestId + '\n\n'
+    + 'Grant Source:\n' + grantSourceLabel + '\n\n'
+    + 'Activity:\n' + activityDisplay + '\n\n'
+    + 'Department:\n' + (department.name || '—') + '\n\n'
+    + 'Amount:\n' + formatCurrency(amount) + '\n\n'
+    + 'Revenue Account:\n' + accounts.revenueAccountNumber + '\n\n'
+    + 'Expense Account:\n' + accounts.expenseAccountNumber + '\n\n'
+    + 'Grant Number:\n' + (data.grantNumber || '—') + '\n\n'
+    + 'Granting Agency:\n' + (data.grantingAgency || '') + '\n\n'
+    + 'Grant Program:\n' + (data.grantProgramName || '') + '\n\n'
+    + 'Board Approval Date:\n' + formatDateForDisplay(data.boardApprovalDate) + '\n\n'
+    + 'Prepared By:\n' + (data.preparedBy || '') + '\n\n'
+    + 'Title:\n' + (data.title || '') + '\n\n'
+    + 'Requestor Email:\n' + (data.requestorEmail || '') + '\n\n'
+    + 'Submission Date:\n' + formatTimestampForEmail(timestamp) + '\n\n'
+    + 'See the attached PDF for full details.';
+
+  MailApp.sendEmail({
+    to: settings.NotificationEmails.join(','),
+    subject: 'Grant Amendment Request Submitted – Request #' + requestId,
     body: body,
     attachments: [pdfBlob],
   });

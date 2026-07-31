@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#003e28" />
+  <title>Grant Amendment Request</title>
+  <meta name="description" content="Submit a grant amendment request, with the revenue and expense accounts auto-filled from the grant's source and activity." />
+  <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="grant">
+
+  <header class="site-header no-print">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
+        <span class="brand-seal">
+          <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        </span>
+        <span class="brand-text">
+          <span class="brand-top">Walton County</span>
+          <span class="brand-bottom">Board of County Commissioners</span>
+        </span>
+      </a>
+      <nav id="siteNav" aria-label="Budget Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <div class="portal-page-heading">
+      <div class="page-eyebrow">Budget Management Portal</div>
+      <div class="portal-page-heading-row">
+        <h1>Grant Amendment Request</h1>
+        <button type="button" id="clearBtn" class="btn btn-danger no-print">Clear Form</button>
+      </div>
+    </div>
+
+    <!-- Chart of Accounts load status (loading / error / loaded+refresh) -->
+    <div id="coaStatusBanner" class="banner banner-info no-print" hidden></div>
+
+    <!-- Submission status banner -->
+    <div id="statusBanner" class="banner no-print" hidden></div>
+
+    <form id="grantForm" novalidate>
+
+      <!-- Grant agreement gate — must be answered before anything else on
+           the form is usable (see js/grant.js's evaluateGate()). A "No"
+           blocks the request entirely with an explanatory banner; a "Yes"
+           reveals a required Board approval date, which becomes the
+           adoption date on the Generate Grant Resolution document below,
+           and only then reveals #formBody. -->
+      <section class="card">
+        <h2 class="section-title">Grant Agreement</h2>
+        <div class="card-body">
+          <div class="radio-group" role="radiogroup" aria-describedby="agreementApproved-error">
+            <label class="radio-option">
+              <input type="radio" name="agreementApproved" value="yes" required />
+              <span><strong>Yes</strong> — the grant agreement has been, or will be, approved by the Board of County Commissioners.</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="agreementApproved" value="no" required />
+              <span><strong>No</strong></span>
+            </label>
+          </div>
+          <p class="error-text" id="agreementApproved-error"></p>
+
+          <div class="banner banner-error no-print" id="agreementNoBanner" hidden>
+            We are unable to process a grant amendment request without an approved grant agreement. Please submit this request once the Board of County Commissioners has approved, or is scheduled to approve, the grant agreement.
+          </div>
+
+          <div class="field" id="boardApprovalDateField" style="margin-top: 1rem;" hidden>
+            <label for="boardApprovalDate">When will the Board approve the grant agreement? <span class="required">*</span></label>
+            <input type="date" id="boardApprovalDate" />
+            <p class="field-hint">This is the date that will be keyed onto the Grant Resolution as its adoption date.</p>
+            <p class="error-text" id="boardApprovalDate-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <div id="formBody" hidden>
+
+      <!-- Request information — same field set as Budget Request's Request
+           Information card (see transfer.html), adapted to the grant
+           context. -->
+      <section class="card">
+        <h2 class="section-title">Request Information</h2>
+        <div class="card-body">
+          <div class="grid-2">
+            <div class="field">
+              <label for="preparedBy">Prepared By <span class="required">*</span></label>
+              <input type="text" id="preparedBy" name="preparedBy" maxlength="50" required />
+              <p class="error-text" id="preparedBy-error"></p>
+            </div>
+            <div class="field">
+              <label for="title">Title <span class="required">*</span></label>
+              <input type="text" id="title" name="title" maxlength="50" required />
+              <p class="error-text" id="title-error"></p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="requestorEmail">Requestor Email Address <span class="required">*</span></label>
+            <input type="email" id="requestorEmail" name="requestorEmail" placeholder="you@waltoncountyfl.gov" maxlength="50" required />
+            <p class="error-text" id="requestorEmail-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Grant source + activity — the Activity list is looked up from
+           the Florida Accounting Manual's 331.xxx (Federal Grants) /
+           334.xxx (State Grants) revenue account series (see
+           js/grant.js's ACTIVITY_CODES), and re-populates whenever the
+           source changes. -->
+      <section class="card">
+        <h2 class="section-title">Grant Source</h2>
+        <div class="card-body">
+          <div class="field">
+            <label for="grantNumber">Grant Number</label>
+            <input type="text" id="grantNumber" inputmode="numeric" maxlength="5" placeholder="Optional" />
+            <p class="error-text" id="grantNumber-error"></p>
+          </div>
+
+          <div class="radio-group" role="radiogroup" aria-describedby="grantSource-error" style="margin-top: 1rem;">
+            <label class="radio-option">
+              <input type="radio" name="grantSource" value="federal" required />
+              <span>
+                <strong>Federal Grant</strong>
+                <small>Revenues granted from the federal government, whether direct or administered by a state agency.</small>
+              </span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="grantSource" value="state" required />
+              <span>
+                <strong>State Grant</strong>
+                <small>Revenues originating from state agencies, including contractual payments and JPA revenue.</small>
+              </span>
+            </label>
+          </div>
+          <p class="error-text" id="grantSource-error"></p>
+
+          <div class="field" style="margin-top: 1rem;">
+            <label for="activityCodeInput">Activity of the Grant <span class="required">*</span></label>
+            <div class="combobox" data-combobox="activity">
+              <input type="text" id="activityCodeInput" class="activity-input" placeholder="Select a grant source first..." aria-label="Activity of the Grant" maxlength="80" disabled />
+              <button type="button" class="combobox-clear no-print" aria-label="Clear activity selection" hidden>&times;</button>
+              <ul class="combobox-listbox" id="activityCodeInput-listbox" role="listbox" hidden></ul>
+            </div>
+            <p class="field-hint">Per the Florida Accounting Manual (Rule 69I-51.0012, F.A.C.) — search or browse for the activity that best fits this grant.</p>
+            <p class="error-text" id="activityCode-error"></p>
+          </div>
+
+          <!-- Granting Agency + Grant Program Name feed the Generate Grant
+               Resolution document below (see js/grant.js's
+               populateResolutionView()) — not used by the auto-filled
+               accounts above. -->
+          <div class="field" style="margin-top: 1rem;">
+            <label for="grantingAgency">Granting Agency <span class="required">*</span></label>
+            <input type="text" id="grantingAgency" maxlength="120" placeholder="e.g. State of Florida Department of Environmental Protection (FDEP)" required />
+            <p class="error-text" id="grantingAgency-error"></p>
+          </div>
+
+          <div class="field" style="margin-top: 1rem;">
+            <label for="grantProgramName">Grant Program Name <span class="required">*</span></label>
+            <input type="text" id="grantProgramName" maxlength="150" placeholder="e.g. Household Hazardous Waste Collection Center Grant Program" required />
+            <p class="error-text" id="grantProgramName-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Department — the fund prefix (first 3 digits of its account code)
+           feeds the auto-filled Revenue Account below, and its full code
+           feeds the auto-filled Expense Account. -->
+      <section class="card">
+        <h2 class="section-title">Department</h2>
+        <div class="card-body">
+          <div class="field department-field">
+            <label for="departmentInput">Department <span class="required">*</span></label>
+            <div class="combobox" data-combobox="department">
+              <input type="text" id="departmentInput" class="department-input" placeholder="Search department by name or account..." aria-label="Department" maxlength="50" />
+              <button type="button" class="combobox-clear no-print" aria-label="Clear department selection" hidden>&times;</button>
+              <ul class="combobox-listbox" id="departmentInput-listbox" role="listbox" hidden></ul>
+            </div>
+            <p class="error-text" id="department-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Amendment details — Category decides the Expense Account's object
+           code (see js/grant.js's CATEGORY_OBJECT_CODES); Amount is shared
+           by both auto-filled accounts below, since a grant amendment
+           moves the same dollar amount into revenue and out to expense. -->
+      <section class="card">
+        <h2 class="section-title">Amendment Details</h2>
+        <div class="card-body">
+          <div class="radio-group" role="radiogroup" aria-describedby="category-error">
+            <label class="radio-option">
+              <input type="radio" name="category" value="equipment" required />
+              <span><strong>Equipment</strong> <span class="statute">(Object 564000)</span></span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="category" value="construction" required />
+              <span><strong>Construction</strong> <span class="statute">(Object 563000)</span></span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="category" value="design" required />
+              <span><strong>Design</strong> <span class="statute">(Object 531000)</span></span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="category" value="salaries" required />
+              <span><strong>Salaries</strong> <span class="statute">(Object 512000)</span></span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="category" value="other" required />
+              <span><strong>Other</strong> <span class="statute">(Object 534000)</span></span>
+            </label>
+          </div>
+          <p class="error-text" id="category-error"></p>
+
+          <div class="field" style="margin-top: 1rem;">
+            <label for="amount">Grant Amendment Amount <span class="required">*</span></label>
+            <input type="text" id="amount" inputmode="decimal" placeholder="0.00" maxlength="13" required />
+            <p class="error-text" id="amount-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Auto-filled accounts — recomputed live by js/grant.js's
+           updateAccountPreviews() from Grant Source + Activity +
+           Department + Category + Amount + Grant Number above. Not
+           editable directly; fix the fields above to change these. -->
+      <section class="card">
+        <h2 class="section-title">Auto-Filled Accounts</h2>
+        <div class="card-body">
+          <div class="account-preview">
+            <div class="account-preview-label">Revenue Account</div>
+            <div class="account-preview-number" id="revenueAccountNumber">—</div>
+            <div class="account-preview-desc" id="revenueAccountDesc"></div>
+            <div class="account-preview-amount">
+              <span>Amount</span>
+              <span id="revenueAccountAmount">$0.00</span>
+            </div>
+          </div>
+          <div class="account-preview">
+            <div class="account-preview-label">Expense Account</div>
+            <div class="account-preview-number" id="expenseAccountNumber">—</div>
+            <div class="account-preview-desc" id="expenseAccountDesc"></div>
+            <div class="account-preview-amount">
+              <span>Amount</span>
+              <span id="expenseAccountAmount">$0.00</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div class="actions no-print">
+        <button type="submit" id="submitBtn" class="btn btn-primary">Submit Grant Amendment Request</button>
+        <button type="button" id="printBtn" class="btn btn-secondary">Print Form</button>
+        <button type="button" id="generateResolutionBtn" class="btn btn-secondary">Generate Grant Resolution</button>
+      </div>
+
+      </div><!-- #formBody -->
+
+    </form>
+
+    <!-- Print-only clerical entry view — populated by grant.js's
+         populatePrintView() right before window.print() is called.
+         Mirrors transfer.html's/rollforward.html's #printView. Both this
+         and #resolutionPrintView carry .print-only (hidden on screen);
+         grant.js's printBtn/generateResolutionBtn handlers set an inline
+         display:none on whichever one is NOT being printed, since only
+         one of the two should ever print at once. -->
+    <div id="printView" class="print-only">
+      <div class="print-header">
+        <img class="print-seal" src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        <div>
+          <h1>Grant Amendment Request</h1>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Prepared By:</span> <span id="printPreparedBy"></span></span>
+            <span><span class="print-field-label">Title:</span> <span id="printTitle"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Requestor Email:</span> <span id="printRequestorEmail"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Grant Number:</span> <span id="printGrantNumber"></span></span>
+            <span><span class="print-field-label">Grant Source:</span> <span id="printGrantSource"></span></span>
+            <span><span class="print-field-label">Activity:</span> <span id="printActivity"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Granting Agency:</span> <span id="printGrantingAgency"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Grant Program:</span> <span id="printGrantProgramName"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Department:</span> <span id="printDepartment"></span></span>
+            <span><span class="print-field-label">Board Approval Date:</span> <span id="printBoardApprovalDate"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="print-tables">
+        <div>
+          <h2>Revenue Account</h2>
+          <table class="print-table">
+            <colgroup>
+              <col style="width: 60%" />
+              <col style="width: 40%" />
+            </colgroup>
+            <thead>
+              <tr><th>Account Number</th><th>Amount</th></tr>
+            </thead>
+            <tbody id="printRevenueBody"></tbody>
+          </table>
+        </div>
+        <div>
+          <h2>Expense Account</h2>
+          <table class="print-table">
+            <colgroup>
+              <col style="width: 60%" />
+              <col style="width: 40%" />
+            </colgroup>
+            <thead>
+              <tr><th>Account Number</th><th>Amount</th></tr>
+            </thead>
+            <tbody id="printExpenseBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grant Resolution — a dynamic version of the county's standard
+         resolution template (letterhead/signature blocks are the fixed
+         boilerplate every resolution uses; the resolution number line,
+         title paragraph, WHEREAS/RESOLVED clauses, and adoption date are
+         filled in by grant.js's populateResolutionView() from the form
+         above). See #printView's comment above for how the two views
+         avoid printing at the same time. -->
+    <div id="resolutionPrintView" class="print-only">
+      <div class="resolution-letterhead">
+        <div class="resolution-letterhead-title">
+          <h1>WALTON COUNTY, FLORIDA</h1>
+          <h2>Board of County Commissioners</h2>
+        </div>
+        <div class="resolution-letterhead-grid">
+          <div class="resolution-commissioners">
+            Dan Curry, District 1<br />
+            Danny Glidewell, District 2<br />
+            Brad Drake, District 3 - Chair<br />
+            Donna Johns, District 4<br />
+            Tony Anderson, District 5 – Vice Chair
+          </div>
+          <img class="resolution-seal" src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+          <div class="resolution-address">
+            P.O. Box 1355<br />
+            DeFuniak Springs, FL 32435<br />
+            Phone: (850) 892-8155<br />
+            Fax: (850) 892-8454<br />
+            www.co.walton.fl.us
+          </div>
+        </div>
+      </div>
+
+      <hr class="resolution-rule" />
+
+      <p class="resolution-number" id="resolutionNumber"></p>
+      <p class="resolution-title" id="resolutionTitle"></p>
+      <p class="resolution-body" id="resolutionWhereas"></p>
+      <p class="resolution-body" id="resolutionResolved"></p>
+      <p class="resolution-body" id="resolutionAdopted"></p>
+
+      <div class="resolution-signatures">
+        <div class="resolution-sig-col">
+          <div class="resolution-sig-label">ATTEST:</div>
+          <div class="resolution-sig-line"></div>
+          <div class="resolution-sig-name">Crystal Sconiers, Clerk of the<br />Circuit Court and Comptroller</div>
+        </div>
+        <div class="resolution-sig-col">
+          <div class="resolution-sig-label">WALTON COUNTY BOARD OF<br />COUNTY COMMISSIONERS</div>
+          <div class="resolution-sig-line"></div>
+          <div class="resolution-sig-name">Brad Drake, Chairman</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Submission confirmation pop-up — shown after a successful Submit
+       (see js/grant.js's showSubmissionModal()). -->
+  <div id="submissionModal" class="modal-overlay no-print" hidden>
+    <div class="modal-dialog" role="alertdialog" aria-modal="true" aria-labelledby="submissionModalTitle" aria-describedby="submissionModalBody">
+      <h2 id="submissionModalTitle">Request Submitted</h2>
+      <p id="submissionModalBody"></p>
+      <div class="modal-actions">
+        <button type="button" id="submissionModalCloseBtn" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load order matters: each module expects the ones before it to
+       already be attached to window.BudgetApp by the time it runs. No
+       expenses.js/revenue.js/js account search needed — the Revenue and
+       Expense accounts here are computed directly from Grant
+       Source/Activity/Department/Category, not looked up from the Chart
+       of Accounts. -->
+  <script src="js/calculations.js"></script>
+  <script src="js/googleSheets.js"></script>
+  <script src="js/departments.js"></script>
+  <script src="js/accountSearch.js"></script>
+  <script src="js/validation.js"></script>
+  <script src="js/print.js"></script>
+  <script src="js/submission.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/grant.js"></script>
+</body>
+</html>
