@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Budget Dashboard — Microsoft SSO Proof of Concept</title>
+
+<style>
+  /* ---------- Minimal, clean styling — no framework ---------- */
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, Segoe UI, Arial, Helvetica, sans-serif;
+    background: #f4f6f8;
+    color: #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .card {
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+  }
+
+  h1 {
+    font-size: 1.25rem;
+    margin: 0 0 0.35rem;
+  }
+
+  .subtitle {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0 0 1.75rem;
+  }
+
+  button {
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.65rem 1.25rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  #loginBtn {
+    background: #0067b8; /* Microsoft blue */
+    color: #ffffff;
+    width: 100%;
+  }
+
+  #logoutBtn {
+    background: #f3f3f3;
+    color: #333;
+    border: 1px solid #d0d0d0;
+    margin-top: 1.25rem;
+  }
+
+  #userInfo { text-align: left; }
+
+  #userInfo .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #0067b8;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin: 0 auto 1rem;
+  }
+
+  #userInfo .name {
+    font-weight: 700;
+    text-align: center;
+  }
+
+  #userInfo .email {
+    color: #666;
+    font-size: 0.85rem;
+    text-align: center;
+    margin-bottom: 0;
+  }
+
+  .error {
+    background: #fdecea;
+    color: #b3261e;
+    border: 1px solid #f5c2bf;
+    border-radius: 6px;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.85rem;
+    margin-top: 1.25rem;
+    text-align: left;
+  }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>Budget Dashboard</h1>
+    <p class="subtitle">Sign in with your organization account to continue.</p>
+
+    <!-- Logged-out view -->
+    <button id="loginBtn" type="button">Sign in with Microsoft</button>
+
+    <!-- Logged-in view (hidden until a successful login) -->
+    <div id="userInfo" hidden>
+      <div class="avatar" id="userInitial"></div>
+      <p class="name" id="userName"></p>
+      <p class="email" id="userEmail"></p>
+      <button id="logoutBtn" type="button">Sign out</button>
+    </div>
+
+    <!-- Error output -->
+    <div class="error" id="errorBox" hidden></div>
+  </div>
+
+  <!--
+    MSAL Browser library, loaded from jsDelivr (mirrors the @azure/msal-browser
+    npm package — pinned to major version 3, auto-resolves to the latest 3.x).
+    Docs: https://github.com/AzureAD/microsoft-authentication-library-for-js
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+
+  <script>
+    'use strict';
+
+    // =====================================================================
+    // 1. MSAL CONFIGURATION
+    //    Fill in the two values below from your Azure AD app registration
+    //    (Azure Portal -> App registrations -> your app -> Overview).
+    // =====================================================================
+    const msalConfig = {
+      auth: {
+        // "Application (client) ID" from the app registration overview page.
+        clientId: 'YOUR_CLIENT_ID_HERE',
+
+        // Built from the "Directory (tenant) ID" on the same overview page.
+        // Using the tenant-specific authority (rather than "common") means
+        // only accounts in your organization's tenant can sign in.
+        authority: 'https://login.microsoftonline.com/YOUR_TENANT_ID_HERE',
+
+        // Must exactly match a "Single-page application" redirect URI
+        // configured on the app registration (Authentication blade).
+        redirectUri: 'http://127.0.0.1:5500',
+      },
+      cache: {
+        // Per the requirement to keep login state in memory only (nothing
+        // written to localStorage/sessionStorage, nothing persisted across
+        // tabs or page reloads) — refreshing the page will require signing
+        // in again. Switch to "sessionStorage" later if that's undesirable.
+        cacheLocation: 'memoryStorage',
+        storeAuthStateInCookie: false,
+      },
+    };
+
+    // Scopes requested at sign-in. User.Read is the standard Microsoft
+    // Graph "read my own profile" permission — enough to prove identity
+    // and read name/email; expand this array later if the app needs to
+    // call other Graph endpoints on the user's behalf.
+    const loginRequest = {
+      scopes: ['User.Read'],
+    };
+
+    // The single MSAL client instance for the page — everything below
+    // goes through this object.
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+    // =====================================================================
+    // 2. IN-MEMORY AUTH STATE
+    //    currentAccount is the one source of truth the UI renders from.
+    //    No backend, no storage — it simply lives in this JS variable for
+    //    as long as the page/tab is open.
+    // =====================================================================
+    let currentAccount = null;
+
+    // =====================================================================
+    // 3. DOM REFERENCES
+    // =====================================================================
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userInfoEl = document.getElementById('userInfo');
+    const userInitialEl = document.getElementById('userInitial');
+    const userNameEl = document.getElementById('userName');
+    const userEmailEl = document.getElementById('userEmail');
+    const errorBox = document.getElementById('errorBox');
+
+    // =====================================================================
+    // 4. UI HELPERS
+    // =====================================================================
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.hidden = false;
+    }
+
+    function clearError() {
+      errorBox.hidden = true;
+      errorBox.textContent = '';
+    }
+
+    // Re-renders the login/logout views from currentAccount. Called after
+    // every state change so the UI and currentAccount can never drift.
+    function renderAuthState() {
+      const isLoggedIn = !!currentAccount;
+
+      loginBtn.hidden = isLoggedIn;
+      userInfoEl.hidden = !isLoggedIn;
+
+      if (isLoggedIn) {
+        const displayName = currentAccount.name || currentAccount.username;
+        userNameEl.textContent = displayName;
+        userEmailEl.textContent = currentAccount.username; // UPN / email
+        userInitialEl.textContent = displayName.charAt(0).toUpperCase();
+      }
+    }
+
+    // =====================================================================
+    // 5. SIGN IN — loginPopup opens a Microsoft-hosted popup window; the
+    //    promise resolves once the user completes authentication there.
+    // =====================================================================
+    async function handleLogin() {
+      clearError();
+      loginBtn.disabled = true;
+
+      try {
+        console.log('[auth] Starting loginPopup...');
+        const result = await msalInstance.loginPopup(loginRequest);
+        console.log('[auth] loginPopup resolved:', result);
+
+        currentAccount = result.account;
+
+        // Tells MSAL which account subsequent calls (e.g. acquireTokenSilent
+        // for future Graph calls) should act on.
+        msalInstance.setActiveAccount(currentAccount);
+
+        renderAuthState();
+      } catch (error) {
+        console.error('[auth] Login failed:', error);
+
+        // errorCode is the machine-readable reason MSAL gives us (e.g.
+        // "user_cancelled" if they closed the popup) — surface something
+        // readable without exposing raw error internals to the page.
+        if (error && error.errorCode === 'user_cancelled') {
+          showError('Sign-in was cancelled.');
+        } else {
+          showError('Sign-in failed. Please try again.');
+        }
+      } finally {
+        loginBtn.disabled = false;
+      }
+    }
+
+    // =====================================================================
+    // 6. SIGN OUT — logoutPopup clears MSAL's in-memory cache for this
+    //    account and closes the Microsoft session in the popup context.
+    // =====================================================================
+    async function handleLogout() {
+      clearError();
+      logoutBtn.disabled = true;
+
+      try {
+        console.log('[auth] Starting logoutPopup...');
+        await msalInstance.logoutPopup({
+          account: currentAccount,
+          mainWindowRedirectUri: msalConfig.auth.redirectUri,
+        });
+        console.log('[auth] Logged out.');
+
+        currentAccount = null;
+        renderAuthState();
+      } catch (error) {
+        console.error('[auth] Logout failed:', error);
+        showError('Sign-out failed. Please try again.');
+      } finally {
+        logoutBtn.disabled = false;
+      }
+    }
+
+    // =====================================================================
+    // 7. INIT — runs once on page load. Because cacheLocation is
+    //    "memoryStorage", this will only ever find an account if MSAL's
+    //    in-memory cache survived (e.g. this init ran once already in the
+    //    same page lifetime) — a hard refresh always starts logged out,
+    //    which is the intended behavior for an in-memory-only session.
+    // =====================================================================
+    function init() {
+      const existingAccounts = msalInstance.getAllAccounts();
+      if (existingAccounts.length > 0) {
+        currentAccount = existingAccounts[0];
+        msalInstance.setActiveAccount(currentAccount);
+        console.log('[auth] Restored existing in-memory session:', currentAccount);
+      }
+      renderAuthState();
+    }
+
+    loginBtn.addEventListener('click', handleLogin);
+    logoutBtn.addEventListener('click', handleLogout);
+
+    init();
+
+    // =====================================================================
+    // 8. EXPANSION HOOK — admin-only section
+    //    Once Azure AD app roles or security-group claims are configured
+    //    on the app registration, they show up on the ID token. Example
+    //    of how a later "admin panel" would gate itself off this same
+    //    currentAccount state, without restructuring anything above:
+    //
+    //    function isAdmin() {
+    //      if (!currentAccount) return false;
+    //      const roles = currentAccount.idTokenClaims?.roles || [];
+    //      return roles.includes('Admin');
+    //    }
+    //
+    //    if (isAdmin()) {
+    //      document.getElementById('adminSection').hidden = false;
+    //    }
+    // =====================================================================
+  </script>
+
+</body>
+</html>
