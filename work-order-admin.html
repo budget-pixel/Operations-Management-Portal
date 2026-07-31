@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#003e28" />
-  <title>Operations Management Portal</title>
-  <meta name="description" content="Budget, grant, project, asset, work order, and reporting tools for Walton County." />
+  <title>Work Orders Admin</title>
+  <meta name="description" content="Manage locations, categories, and assignees for the Work Orders module." />
   <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
-<body data-page="home">
+<body data-page="work-orders">
 
   <header class="site-header no-print">
     <div class="header-inner">
@@ -31,18 +31,29 @@
 
   <main class="page">
 
-    <div class="hero">
-      <h1>Operations Management Portal</h1>
-      <p>Select a module to get started.</p>
+    <div class="portal-page-heading">
+      <div class="page-eyebrow">Work Orders</div>
+      <div class="portal-page-heading-row">
+        <h1>Admin: Locations, Categories &amp; Assignees</h1>
+        <a href="work-orders.html" class="btn btn-secondary no-print">Back to Work Orders</a>
+      </div>
     </div>
 
-    <!-- Cards rendered by js/sections.js from its SECTIONS.home array —
-         add a new module there, not here. -->
-    <section id="landingCards" class="landing-cards"></section>
+    <p class="field-hint">
+      These lists feed the dropdowns on the Work Order Request and Track Work Orders pages.
+      This page is not access-restricted yet — anyone with the link can make changes here.
+    </p>
+
+    <div id="apiStatusBanner" class="banner banner-error no-print" hidden></div>
+
+    <!-- One card per admin-managed list, rendered by js/workOrderAdmin.js
+         from its RESOURCES array — add a new managed list there, not here. -->
+    <section id="adminPanels" class="landing-cards"></section>
 
   </main>
 
   <script src="js/nav.js"></script>
-  <script src="js/sections.js"></script>
+  <script src="js/workOrderApi.js"></script>
+  <script src="js/workOrderAdmin.js"></script>
 </body>
 </html>

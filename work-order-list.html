@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#003e28" />
+  <title>Work Orders</title>
+  <meta name="description" content="Track and update maintenance work order requests." />
+  <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="work-orders">
+
+  <header class="site-header no-print">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
+        <span class="brand-seal">
+          <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        </span>
+        <span class="brand-text">
+          <span class="brand-top">Walton County</span>
+          <span class="brand-bottom">Board of County Commissioners</span>
+        </span>
+      </a>
+      <nav id="siteNav" aria-label="Operations Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <div class="portal-page-heading">
+      <div class="page-eyebrow">Work Orders</div>
+      <div class="portal-page-heading-row">
+        <h1>Track Work Orders</h1>
+        <span class="no-print" style="display: flex; gap: 0.75rem;">
+          <a href="work-order-request.html" class="btn btn-primary">New Work Order Request</a>
+          <a href="work-order-admin.html" class="btn btn-ghost">Admin</a>
+        </span>
+      </div>
+    </div>
+
+    <!-- Backend status banner — shown if the Work Orders API (server/)
+         isn't reachable. -->
+    <div id="apiStatusBanner" class="banner banner-error no-print" hidden></div>
+
+    <section class="card no-print">
+      <div class="card-body">
+        <div class="grid-2" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+          <div class="field">
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter">
+              <option value="All">All</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="locationFilter">Location</label>
+            <select id="locationFilter">
+              <option value="All">All</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="categoryFilter">Category</label>
+            <select id="categoryFilter">
+              <option value="All">All</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="priorityFilter">Priority</label>
+            <select id="priorityFilter">
+              <option value="All">All</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-body">
+        <div class="table-wrapper">
+          <table class="transfer-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Summary</th>
+                <th>Location</th>
+                <th>Category</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Assigned To</th>
+                <th>Submitted</th>
+              </tr>
+            </thead>
+            <tbody id="workOrdersBody">
+              <tr><td colspan="8">Loading work orders...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="js/nav.js"></script>
+  <script src="js/workOrderApi.js"></script>
+  <script src="js/workOrderList.js"></script>
+</body>
+</html>

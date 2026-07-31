@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#003e28" />
+  <title>Work Order Request</title>
+  <meta name="description" content="Submit a maintenance work order request." />
+  <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="work-orders">
+
+  <header class="site-header no-print">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
+        <span class="brand-seal">
+          <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        </span>
+        <span class="brand-text">
+          <span class="brand-top">Walton County</span>
+          <span class="brand-bottom">Board of County Commissioners</span>
+        </span>
+      </a>
+      <nav id="siteNav" aria-label="Operations Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <div class="portal-page-heading">
+      <div class="page-eyebrow">Work Orders</div>
+      <div class="portal-page-heading-row">
+        <h1>Work Order Request</h1>
+        <span class="no-print" style="display: flex; gap: 0.75rem;">
+          <a href="work-order-list.html" class="btn btn-secondary">View Work Orders</a>
+          <a href="work-order-admin.html" class="btn btn-ghost">Admin</a>
+        </span>
+      </div>
+    </div>
+
+    <!-- Backend status banner — shown if the Work Orders API (server/)
+         isn't reachable, same role as the other pages' "not configured
+         yet" banners. -->
+    <div id="apiStatusBanner" class="banner banner-error no-print" hidden></div>
+
+    <!-- Submission status banner -->
+    <div id="statusBanner" class="banner no-print" hidden></div>
+
+    <form id="workOrderForm" novalidate>
+
+      <section class="card">
+        <h2 class="section-title">Requester Information</h2>
+        <div class="card-body">
+          <div class="grid-2">
+            <div class="field">
+              <label for="requesterName">Requester Name <span class="required">*</span></label>
+              <input type="text" id="requesterName" name="requesterName" maxlength="50" required />
+              <p class="error-text" id="requesterName-error"></p>
+            </div>
+            <div class="field">
+              <label for="requesterEmail">Requester Email <span class="required">*</span></label>
+              <input type="email" id="requesterEmail" name="requesterEmail" placeholder="you@waltoncountyfl.gov" maxlength="50" required />
+              <p class="error-text" id="requesterEmail-error"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="section-title">Work Order Details</h2>
+        <div class="card-body">
+          <div class="field">
+            <label for="title">Summary <span class="required">*</span></label>
+            <input type="text" id="title" name="title" maxlength="100" placeholder="Brief summary of the issue" required />
+            <p class="error-text" id="title-error"></p>
+          </div>
+
+          <div class="field">
+            <label for="location">Location <span class="required">*</span></label>
+            <select id="location" name="location" required>
+              <option value="">Select a location...</option>
+            </select>
+            <p class="field-hint" id="noLocationsHint" hidden>
+              No locations are configured yet. Ask a facilities admin to add one on the
+              <a href="work-order-admin.html">admin page</a>.
+            </p>
+            <p class="error-text" id="location-error"></p>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <label for="category">Category <span class="required">*</span></label>
+              <select id="category" name="category" required>
+                <option value="">Select a category...</option>
+              </select>
+              <p class="error-text" id="category-error"></p>
+            </div>
+            <div class="field">
+              <label for="priority">Priority <span class="required">*</span></label>
+              <select id="priority" name="priority" required>
+                <option value="">Select a priority...</option>
+              </select>
+              <p class="error-text" id="priority-error"></p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="description">Description <span class="required">*</span></label>
+            <textarea id="description" name="description" rows="5" maxlength="500" placeholder="Describe the issue in detail — what's wrong, when it started, anything already tried..." required></textarea>
+            <p class="error-text" id="description-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <div class="actions no-print">
+        <button type="submit" id="submitBtn" class="btn btn-primary">Submit Work Order Request</button>
+      </div>
+
+    </form>
+
+  </main>
+
+  <script src="js/nav.js"></script>
+  <script src="js/workOrderApi.js"></script>
+  <script src="js/workOrderRequest.js"></script>
+</body>
+</html>

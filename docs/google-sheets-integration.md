@@ -1,6 +1,6 @@
 # Chart of Accounts — Google Sheets Integration
 
-The Budget Management Portal has three workflows — Budget Request
+The Operations Management Portal has three workflows — Budget Request
 (`transfer.html`), Grant Amendment Request (`grant.html`), and Rollforward
 Request (`rollforward.html`) — and all three share this same setup. Their
 Department and Account dropdowns are driven live by a Google Sheets

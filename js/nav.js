@@ -1,12 +1,15 @@
 /* =============================================================
    nav.js
-   Renders the shared portal navigation (Home / Budget Request / Grant
-   Amendment Request / Rollforward Request) into a page's
-   <nav id="siteNav">, with the current page highlighted. One source of
-   truth for the nav markup instead of copy-pasting it into every page.
+   Renders the shared portal navigation (one link per module) into a
+   page's <nav id="siteNav">, with the current module highlighted.
+   The brand/seal link in the header already goes home, so there's no
+   separate Home link here. One source of truth for the nav markup
+   instead of copy-pasting it into every page.
 
-   Each page sets <body data-page="home|transfer|grant|rollforward"> so
-   this module knows which link to mark active.
+   Each page sets <body data-page="..."> so this module knows which
+   link to mark active. Request-type pages nested under a module
+   (transfer, grant, rollforward) set data-page to their *parent*
+   module key, so the nav highlights that module while they're open.
 
    Exposes: window.BudgetApp.Nav
    ============================================================= */
@@ -17,10 +20,12 @@ window.BudgetApp.Nav = (function () {
   'use strict';
 
   var LINKS = [
-    { page: 'home', href: 'index.html', label: 'Home' },
-    { page: 'transfer', href: 'transfer.html', label: 'Budget Request' },
-    { page: 'grant', href: 'grant.html', label: 'Grant Amendment Request' },
-    { page: 'rollforward', href: 'rollforward.html', label: 'Rollforward Request' },
+    { page: 'budget-management', href: 'budget-management.html', label: 'Budget' },
+    { page: 'grant-management', href: 'grant-management.html', label: 'Grant' },
+    { page: 'project-management', href: 'project-management.html', label: 'Project' },
+    { page: 'asset-tracking', href: 'asset-tracking.html', label: 'Asset Tracking' },
+    { page: 'work-orders', href: 'work-orders.html', label: 'Work Orders' },
+    { page: 'reports-analytics', href: 'reports-analytics.html', label: 'Reports & Analytics' },
   ];
 
   function render() {

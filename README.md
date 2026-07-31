@@ -1,4 +1,4 @@
-# Budget Management Portal
+# Operations Management Portal
 
 A plain HTML, CSS, and JavaScript portal for county budget requests. No
 frameworks, no build tools, no dependencies — just open `index.html` in a
@@ -26,6 +26,27 @@ confirms each submission to the requester on-screen.
 2. Double-click `index.html`, or open it from your browser with
    **File → Open**. That's the portal home page — pick a request type from
    there. Nothing to install, no server required.
+3. **Work Orders only** — this module needs its own small backend (it
+   reads back and updates records over time, unlike the one-way Budget/
+   Grant/Rollforward submissions). From the `server/` folder:
+   ```
+   cd server
+   npm install
+   npm start
+   ```
+   This starts the Work Orders API at `http://localhost:4000`. Leave it
+   running, then open `work-order-request.html` or `work-order-list.html`
+   as usual. Data is stored in `server/operations-portal.db` (SQLite,
+   git-ignored) — delete that file to reset.
+
+   Locations, Categories, and Assignees are managed from
+   `work-order-admin.html` (linked from the Work Orders module page and
+   from the request/list pages). The database ships pre-seeded with 220
+   locations, 41 activity categories, and 9 assignees pulled from the old
+   CMMS's export, plus its 912 historical work orders — see
+   `server/scripts/convert-legacy-export.py` and
+   `server/scripts/import-legacy-work-orders.js` if that data ever needs
+   to be re-imported into a fresh database.
 
 ## Features
 

@@ -3,3 +3,15 @@
 .vscode/*
 !.vscode/extensions.json
 *.local
+
+# Work Orders backend (server/)
+server/node_modules/
+server/*.db
+server/*.db-journal
+server/*.db-wal
+server/*.db-shm
+
+# Legacy CMMS export + its converted JSON — contains real employee
+# names and facility data; not something to commit to the repo.
+Work_Order_Inquiry_*.xlsx
+server/scripts/legacy-work-orders.json
