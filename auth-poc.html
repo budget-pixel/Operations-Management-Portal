@@ -302,14 +302,33 @@
     //    in-memory cache survived (e.g. this init ran once already in the
     //    same page lifetime) — a hard refresh always starts logged out,
     //    which is the intended behavior for an in-memory-only session.
+    //
+    //    msal-browser requires initialize() to be called (and awaited)
+    //    before ANY other MSAL API — including getAllAccounts() and
+    //    loginPopup() — or every call throws uninitialized_public_client_
+    //    application. The login button stays disabled until this resolves
+    //    so a click can't race ahead of it.
     // =====================================================================
-    function init() {
-      const existingAccounts = msalInstance.getAllAccounts();
-      if (existingAccounts.length > 0) {
-        currentAccount = existingAccounts[0];
-        msalInstance.setActiveAccount(currentAccount);
-        console.log('[auth] Restored existing in-memory session:', currentAccount);
+    async function init() {
+      loginBtn.disabled = true;
+
+      try {
+        await msalInstance.initialize();
+        console.log('[auth] MSAL initialized.');
+
+        const existingAccounts = msalInstance.getAllAccounts();
+        if (existingAccounts.length > 0) {
+          currentAccount = existingAccounts[0];
+          msalInstance.setActiveAccount(currentAccount);
+          console.log('[auth] Restored existing in-memory session:', currentAccount);
+        }
+      } catch (error) {
+        console.error('[auth] MSAL initialization failed:', error);
+        showError('Could not initialize sign-in. Please reload the page.');
+      } finally {
+        loginBtn.disabled = false;
       }
+
       renderAuthState();
     }
 
