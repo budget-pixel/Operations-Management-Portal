@@ -1,16 +1,18 @@
 # Operations Management Portal
 
-A plain HTML, CSS, and JavaScript portal for county budget requests. No
+A plain HTML, CSS, and JavaScript portal for county operations. No
 frameworks, no build tools, no dependencies — just open `index.html` in a
-browser. It currently offers two workflows:
+browser. Its Budget Management module currently offers three workflows:
 
-- **Budget Transfer / Amendment Request** (`transfer.html`) — transfer
-  existing budget between accounts or amend the current fiscal year budget.
+- **Budget Request** (`budget-request.html`) — request funding for the
+  next fiscal year.
+- **Transfer Request** (`transfer.html`) — transfer existing budget
+  between accounts or amend the current fiscal year budget.
 - **Fiscal Year Rollforward Request** (`rollforward.html`) — request
   authorization to roll unspent budget into the next fiscal year.
 
-Both share the same Department/Account dropdowns, driven live by a Google
-Sheets Chart of Accounts, and the same Google Apps Script backend: each
+All three share the same Department/Account dropdowns, driven live by a
+Google Sheets Chart of Accounts, and the same Google Apps Script backend: each
 submission generates a PDF, records the request in its own worksheet(s),
 and emails the PDF to Budget Office staff. The PDF is never saved anywhere;
 it's built fresh per submission just to attach to that email. A pop-up
@@ -51,15 +53,30 @@ confirms each submission to the requester on-screen.
 ## Features
 
 **Portal-wide**
-- Shared navigation (Home / Budget Transfer / Rollforward Request) on
-  every page, with the current page highlighted
+- Shared navigation (one link per module — Budget, Grant, Project,
+  Asset Tracking, Work Orders, Reports & Analytics) on every page, with
+  the current module highlighted; the header logo/seal links home
 - Accessible, searchable department/account combobox controls: full
   keyboard navigation (arrows, Home/End, Enter, Escape), `aria-invalid`
   states, and screen-reader-friendly labeling
 - Responsive layout for desktop, tablet, and mobile
 - A pop-up confirms each successful submission, naming its Request ID
 
-**Budget Transfer / Amendment Request**
+**Budget Request**
+- Requester Name / Email (50-character limit) and a single department
+  govern the whole request; **+ Add Another Requested Account** adds as
+  many "requested account" line items as needed, each with its own
+  searchable Expense Account (same combobox as Transfer/Rollforward,
+  project-code search/autofill included), an optional Project Number and
+  Current FY Budget (for reference), a Requested Amount for next fiscal
+  year ($0.01–$99,999,999.99), and its own Justification (250-character
+  limit)
+- A "Requesting Funding For Fiscal Year" dropdown and a required
+  certification checkbox apply to the whole request
+- **Print Form** and Request IDs (`BR-2026-0001`) numbered separately
+  from every other workflow's own numbering
+
+**Transfer Request**
 - Date picker, Description (required, 250-character limit), Prepared By and
   Title fields (50-character limit each)
 - **Intradepartmental Amendment** (Fl. St. 129.06(2)(a)) is currently the
@@ -91,16 +108,17 @@ confirms each submission to the requester on-screen.
   Justification (250-character limit)
 - A Fiscal Year dropdown (easy to extend with future years) and a required
   certification checkbox apply to the whole request
-- Request IDs are numbered separately from Budget Transfer's (`RF-2026-0001`)
-  and never interfere with Budget Transfer's own numbering
+- Request IDs are numbered separately from Transfer Request's (`RF-2026-0001`)
+  and never interfere with Transfer Request's own numbering
 
 ## Project Structure
 
 ```
 Budget-Transfer-Request/
 │
-├── index.html                  Landing page — choose a request type
-├── transfer.html                Budget Transfer / Amendment Request form
+├── index.html                  Landing page — choose a module
+├── budget-request.html          Budget Request form (funding for next fiscal year)
+├── transfer.html                Transfer Request form
 ├── rollforward.html             Fiscal Year Rollforward Request form
 ├── css/
 │   └── styles.css              All styling (responsive + print + comboboxes + nav)
@@ -171,24 +189,23 @@ County's green (`#006231`)/gold (`#d1be78`) brand, Arial/Helvetica body
 text, and a Georgia serif accent reserved for page titles, same as the
 reference site's own usage. The county seal (used with permission) lives at
 `assets/images/walton-county-seal.png` and appears in every page's header
-and Budget Transfer's print view.
+and every request form's print view.
 
 ## Notes
 
-- **Submit** and **Print** are independent (Print only exists on the
-  Budget Transfer page): Print is an instant, client-side `window.print()`
-  of the current on-screen form — nothing is sent anywhere. Submit is the
-  one action that actually sends a request anywhere: it POSTs to the Apps
-  Script backend, which generates a *separate* PDF from the submitted
-  data, records the request, and emails that PDF to Budget Office staff
-  (the PDF itself is never saved anywhere — it exists only long enough to
-  attach to that email). A pop-up confirms the submission on-screen; no
-  confirmation email is sent to the requester/requestor on either
-  workflow. See
+- **Submit** and **Print** are independent: Print is an instant,
+  client-side `window.print()` of the current on-screen form — nothing is
+  sent anywhere. Submit is the one action that actually sends a request
+  anywhere: it POSTs to the Apps Script backend, which generates a
+  *separate* PDF from the submitted data, records the request, and emails
+  that PDF to Budget Office staff (the PDF itself is never saved anywhere
+  — it exists only long enough to attach to that email). A pop-up
+  confirms the submission on-screen; no confirmation email is sent to
+  the requester/requestor on any workflow. See
   [`docs/google-sheets-integration.md`](docs/google-sheets-integration.md)
   for the one-time setup (extra worksheets and a Settings sheet for
-  notification emails) required before either Submit button will work.
-- Draft data (Budget Transfer only) is stored in your browser's Local
+  notification emails) required before any Submit button will work.
+- Draft data (Transfer Request only) is stored in your browser's Local
   Storage on this device; it is not shared or synced anywhere. A
   successful submission clears the saved draft.
 - Chart of Accounts data is cached for the current browser tab only

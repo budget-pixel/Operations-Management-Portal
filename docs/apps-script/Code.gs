@@ -257,6 +257,9 @@ function doPost(e) {
     if (requestData && requestData.requestType === 'grant') {
       return jsonResponse(handleGrantSubmission(ss, requestData));
     }
+    if (requestData && requestData.requestType === 'budgetRequest') {
+      return jsonResponse(handleBudgetRequestSubmission(ss, requestData));
+    }
     return jsonResponse(handleTransferSubmission(ss, requestData));
   } catch (err) {
     // Full stack goes to the Apps Script execution log (Executions tab)
@@ -267,9 +270,12 @@ function doPost(e) {
 }
 
 /**
- * Handles a Budget Request submission. Behavior is
- * unchanged from before doPost supported multiple request types — only
- * moved into its own function so doPost can dispatch to it.
+ * Handles a Transfer Request submission (the portal's original workflow,
+ * titled "Budget Request" before the Budget Request/Transfer Request
+ * split — see handleBudgetRequestSubmission() for the newer, separate
+ * "funding for next fiscal year" workflow). Behavior is unchanged from
+ * before doPost supported multiple request types — only moved into its
+ * own function so doPost can dispatch to it.
  *
  * Input: the spreadsheet, and the parsed request payload.
  * Output: { success: true, requestId } or { success: false, error }.
@@ -355,6 +361,68 @@ function sumRollforwardLineAmounts(lines) {
     var amount = parseFloat(line && line.amount);
     return sum + (isFinite(amount) ? amount : 0);
   }, 0);
+}
+
+/**
+ * Handles a Budget Request submission — the fourth portal workflow, and
+ * the portal's richest: a department's full funding request for next
+ * fiscal year, covering New Staffing Requests, Current Vacancies,
+ * Operations, Contractual Services, and Capital Requests (New Vehicle /
+ * Replacement Vehicle / Equipment / Infrastructure). Every section is
+ * optional — a request just needs at least one line somewhere (enforced
+ * client-side; re-checked here in validateBudgetRequestSubmission()).
+ *
+ * Input: the spreadsheet, and the parsed request payload (see
+ * js/budgetRequest.js's collectFormData()) — requestData.newStaffing,
+ * .vacancies, .operations, .contractualServices, and .capital are each
+ * an array (any of which may be empty).
+ * Output: { success: true, requestId } or { success: false, error }.
+ */
+function handleBudgetRequestSubmission(ss, requestData) {
+  var validationErrors = validateBudgetRequestSubmission(requestData);
+  if (validationErrors.length > 0) {
+    return { success: false, error: validationErrors.join(' ') };
+  }
+
+  var settings = getSettings(ss);
+  var requestId = generateRequestId(ss, 'Budget Requests', 'BR-' + settings.FiscalYear + '-', 4, 0);
+  var timestamp = new Date();
+
+  var newStaffing = Array.isArray(requestData.newStaffing) ? requestData.newStaffing : [];
+  var vacancies = Array.isArray(requestData.vacancies) ? requestData.vacancies : [];
+  var operations = Array.isArray(requestData.operations) ? requestData.operations : [];
+  var contractualServices = Array.isArray(requestData.contractualServices) ? requestData.contractualServices : [];
+  var capital = Array.isArray(requestData.capital) ? requestData.capital : [];
+
+  var totals = {
+    newStaffing: newStaffing.reduce(function (sum, line) { return sum + (parseFloat(line.estimatedAnnualCost) || 0); }, 0),
+    operations: sumRollforwardLineAmounts(operations),
+    contractualServices: sumRollforwardLineAmounts(contractualServices),
+    capital: capital.reduce(function (sum, line) { return sum + (parseFloat(line.totalCost) || 0); }, 0),
+  };
+  totals.grand = totals.newStaffing + totals.operations + totals.contractualServices + totals.capital;
+
+  var sections = {
+    newStaffing: newStaffing,
+    vacancies: vacancies,
+    operations: operations,
+    contractualServices: contractualServices,
+    capital: capital,
+  };
+
+  var pdfBlob = buildBudgetRequestPdf(requestData, requestId, timestamp, sections, totals);
+
+  appendBudgetRequestRows(ss, {
+    requestId: requestId,
+    timestamp: timestamp,
+    requestData: requestData,
+    sections: sections,
+    totals: totals,
+  });
+
+  sendBudgetRequestNotification(settings, requestData, requestId, timestamp, sections, totals, pdfBlob);
+
+  return { success: true, requestId: requestId };
 }
 
 /**
@@ -630,6 +698,126 @@ function validateRollforwardSubmission(data) {
     // Contract or PO Number is optional (alphanumeric) — only its length is checked.
     if (line && line.contractPoNumber && !isValidLength(line.contractPoNumber, 50)) {
       errors.push(label + 'Contract or PO Number must be 50 characters or fewer.');
+    }
+  });
+
+  return errors;
+}
+
+/**
+ * Re-validates a Budget Request submission server-side. Structurally
+ * this covers five independent sections (each an array on `data`, any
+ * of which may be empty) rather than Rollforward's single `lines`
+ * array — a department might submit only a Capital request this year,
+ * so the only cross-section rule is "at least one line somewhere",
+ * not "at least one line in every section".
+ *
+ * Input: the parsed request payload.
+ * Output: an array of human-readable error strings (empty = valid).
+ */
+function validateBudgetRequestSubmission(data) {
+  var errors = [];
+
+  if (!data || typeof data !== 'object') {
+    return ['Malformed request payload.'];
+  }
+  if (!data.date) errors.push('Date is required.');
+  if (!data.requesterName) {
+    errors.push('Requester Name is required.');
+  } else if (!isValidLength(data.requesterName, 50)) {
+    errors.push('Requester Name must be 50 characters or fewer.');
+  }
+  if (!data.title) {
+    errors.push('Title is required.');
+  } else if (!isValidLength(data.title, 50)) {
+    errors.push('Title must be 50 characters or fewer.');
+  }
+  if (!data.requesterEmail || !isValidEmailFormat(data.requesterEmail)) {
+    errors.push('A valid Requester Email is required.');
+  } else if (!isValidLength(data.requesterEmail, 50)) {
+    errors.push('Requester Email must be 50 characters or fewer.');
+  }
+  if (!data.department || !data.department.code) errors.push('Department is required.');
+  if (!data.fiscalYear) errors.push('Fiscal Year is required.');
+  if (data.certified !== true) errors.push('Certification is required.');
+
+  var newStaffing = Array.isArray(data.newStaffing) ? data.newStaffing : [];
+  var vacancies = Array.isArray(data.vacancies) ? data.vacancies : [];
+  var operations = Array.isArray(data.operations) ? data.operations : [];
+  var contractualServices = Array.isArray(data.contractualServices) ? data.contractualServices : [];
+  var capital = Array.isArray(data.capital) ? data.capital : [];
+
+  var totalLineCount = newStaffing.length + vacancies.length + operations.length
+    + contractualServices.length + capital.length;
+  if (totalLineCount === 0) {
+    errors.push('At least one item is required in at least one section (New Staffing, Vacancies, Operations, Contractual Services, or Capital).');
+  }
+
+  newStaffing.forEach(function (line, index) {
+    var label = 'New Position Request ' + (index + 1) + ': ';
+    if (!line || !line.positionTitle) errors.push(label + 'a Position Title is required.');
+    if (!line || !(parseInt(line.numberOfPositions, 10) >= 1)) errors.push(label + 'Number of Positions must be at least 1.');
+    if (!line || !isValidAmountValue(line.estimatedAnnualCost)) {
+      errors.push(label + 'a valid Estimated Annual Cost between 0.01 and ' + formatCurrency(MAX_AMOUNT) + ' is required.');
+    }
+    if (!line || !line.justification) {
+      errors.push(label + 'a Justification is required.');
+    } else if (!isValidLength(line.justification, 250)) {
+      errors.push(label + 'Justification must be 250 characters or fewer.');
+    }
+  });
+
+  vacancies.forEach(function (line, index) {
+    var label = 'Vacant Position ' + (index + 1) + ': ';
+    if (!line || !line.positionTitle) errors.push(label + 'a Position Title is required.');
+    if (!line || !line.vacantSince) errors.push(label + 'Vacant Since is required.');
+  });
+
+  function validateAccountLine(line, index, label) {
+    if (!line || !line.account || !line.account.code) {
+      errors.push(label + 'an Expense Account is required.');
+    }
+    if (!line || !isValidAmountValue(line.amount)) {
+      errors.push(label + 'a valid Requested Amount between 0.01 and ' + formatCurrency(MAX_AMOUNT) + ' is required.');
+    }
+    if (!line || !line.justification) {
+      errors.push(label + 'a Justification is required.');
+    } else if (!isValidLength(line.justification, 250)) {
+      errors.push(label + 'Justification must be 250 characters or fewer.');
+    }
+    // Current FY Budget is optional (for reference only) — only checked
+    // for a valid amount if the requester filled it in at all.
+    if (line && line.currentFiscalYearBudget && !isValidAmountValue(line.currentFiscalYearBudget)) {
+      errors.push(label + 'Current FY Budget must be a valid amount if provided.');
+    }
+  }
+
+  operations.forEach(function (line, index) {
+    validateAccountLine(line, index, 'Operating Line Item ' + (index + 1) + ': ');
+  });
+  contractualServices.forEach(function (line, index) {
+    validateAccountLine(line, index, 'Contractual Service ' + (index + 1) + ': ');
+  });
+
+  var VALID_CAPITAL_TYPES = { 'New Vehicle': true, 'Replacement Vehicle': true, 'Equipment': true, 'Infrastructure': true };
+  capital.forEach(function (line, index) {
+    var label = 'Capital Item ' + (index + 1) + ': ';
+    if (!line || !VALID_CAPITAL_TYPES[line.type]) {
+      errors.push(label + 'a valid Type (New Vehicle, Replacement Vehicle, Equipment, or Infrastructure) is required.');
+    }
+    if (!line || !line.description) {
+      errors.push(label + 'a Description is required.');
+    } else if (!isValidLength(line.description, 120)) {
+      errors.push(label + 'Description must be 120 characters or fewer.');
+    }
+    if (!line || !(parseInt(line.quantity, 10) >= 1)) errors.push(label + 'Quantity must be at least 1.');
+    if (!line || !isValidAmountValue(line.unitCost)) {
+      errors.push(label + 'a valid Estimated Unit Cost between 0.01 and ' + formatCurrency(MAX_AMOUNT) + ' is required.');
+    }
+    if (!line || !line.justification) {
+      errors.push(label + 'a Justification is required.');
+    } else if (!isValidLength(line.justification, 250)) {
+      errors.push(label + 'Justification must be 250 characters or fewer.');
     }
   });
 
@@ -974,6 +1162,192 @@ function appendRollforwardRows(ss, params) {
 }
 
 /**
+ * Writes a Budget Request submission across its five sheets: one
+ * summary row in "Budget Requests", plus one row per line in each of
+ * "Budget Request Staffing", "Budget Request Vacancies", "Budget
+ * Request Line Items" (Operations and Contractual Services share this
+ * sheet, told apart by its Category column), and "Budget Request
+ * Capital". Any section with zero lines simply writes zero rows to its
+ * sheet — there's no rollback/pairing concern here (unlike Transfer's
+ * two-sheet write) since every sheet's write is independent and a
+ * missing section is a normal, expected state.
+ *
+ * "Budget Requests" columns, in order: Request ID, Timestamp,
+ * Requester Name, Requester Email, Department Code, Department Name,
+ * Fiscal Year, Request Date, Title, Total New Staffing Cost, Total
+ * Operations, Total Contractual Services, Total Capital, Grand Total,
+ * Status.
+ */
+function appendBudgetRequestRows(ss, params) {
+  var data = params.requestData;
+  var department = data.department || {};
+  var totals = params.totals;
+
+  var summarySheet = ss.getSheetByName('Budget Requests');
+  if (!summarySheet) {
+    throw new Error('Sheet not found: "Budget Requests".');
+  }
+  summarySheet.appendRow([
+    params.requestId,
+    params.timestamp,
+    data.requesterName || '',
+    data.requesterEmail || '',
+    department.code || '',
+    department.name || '',
+    data.fiscalYear || '',
+    data.date || '',
+    data.title || '',
+    totals.newStaffing,
+    totals.operations,
+    totals.contractualServices,
+    totals.capital,
+    totals.grand,
+    'Submitted',
+  ]);
+
+  appendBudgetRequestStaffingRows(ss, params);
+  appendBudgetRequestVacancyRows(ss, params);
+  appendBudgetRequestLineItemRows(ss, params);
+  appendBudgetRequestCapitalRows(ss, params);
+}
+
+/**
+ * Appends one row per new position to "Budget Request Staffing".
+ * Columns, in order: Request ID, Timestamp, Position Title, Number of
+ * Positions, Estimated Annual Cost, Justification.
+ */
+function appendBudgetRequestStaffingRows(ss, params) {
+  var lines = params.sections.newStaffing;
+  if (lines.length === 0) return;
+
+  var sheet = ss.getSheetByName('Budget Request Staffing');
+  if (!sheet) {
+    throw new Error('Sheet not found: "Budget Request Staffing".');
+  }
+
+  var rows = lines.map(function (line) {
+    return [
+      params.requestId,
+      params.timestamp,
+      line.positionTitle || '',
+      parseInt(line.numberOfPositions, 10) || 0,
+      parseFloat(line.estimatedAnnualCost) || 0,
+      line.justification || '',
+    ];
+  });
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+/**
+ * Appends one row per vacant position to "Budget Request Vacancies".
+ * No dollar figure — these are already-budgeted positions, not a new
+ * funding request; Time Vacant is stored as the client computed it
+ * (a human-readable string like "1 year, 2 months") rather than
+ * recomputed server-side, since it's informational, not validated.
+ * Columns, in order: Request ID, Timestamp, Position Title, Position
+ * Number, Vacant Since, Time Vacant, Plan to Fill, Notes.
+ */
+function appendBudgetRequestVacancyRows(ss, params) {
+  var lines = params.sections.vacancies;
+  if (lines.length === 0) return;
+
+  var sheet = ss.getSheetByName('Budget Request Vacancies');
+  if (!sheet) {
+    throw new Error('Sheet not found: "Budget Request Vacancies".');
+  }
+
+  var rows = lines.map(function (line) {
+    return [
+      params.requestId,
+      params.timestamp,
+      line.positionTitle || '',
+      line.positionNumber || '',
+      line.vacantSince || '',
+      line.timeVacant || '',
+      line.planToFill || '',
+      line.notes || '',
+    ];
+  });
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+/**
+ * Appends one row per line to "Budget Request Line Items" — Operations
+ * and Contractual Services share this sheet (told apart by Category)
+ * since both are Expense-Account-driven with the same Current FY
+ * Budget / Requested Amount / Justification shape; only Contractual
+ * Services populates Vendor Name.
+ * Columns, in order: Request ID, Timestamp, Category, Vendor Name,
+ * Expense Account, Project Number, Current FY Budget, Requested
+ * Amount, Justification.
+ */
+function appendBudgetRequestLineItemRows(ss, params) {
+  var data = params.requestData;
+  var department = data.department || {};
+  var operations = params.sections.operations;
+  var contractualServices = params.sections.contractualServices;
+  if (operations.length === 0 && contractualServices.length === 0) return;
+
+  var sheet = ss.getSheetByName('Budget Request Line Items');
+  if (!sheet) {
+    throw new Error('Sheet not found: "Budget Request Line Items".');
+  }
+
+  function buildRow(line, category) {
+    var account = line.account || {};
+    var accountNumber = buildAccountNumber(department.code, account, line.projectCode);
+    return [
+      params.requestId,
+      params.timestamp,
+      category,
+      line.vendorName || '',
+      accountNumber + (account.name ? ' - ' + account.name : ''),
+      line.projectCode || '',
+      line.currentFiscalYearBudget ? (parseFloat(line.currentFiscalYearBudget) || 0) : '',
+      parseFloat(line.amount) || 0,
+      line.justification || '',
+    ];
+  }
+
+  var rows = operations.map(function (line) { return buildRow(line, 'Operations'); })
+    .concat(contractualServices.map(function (line) { return buildRow(line, 'Contractual Services'); }));
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+/**
+ * Appends one row per item to "Budget Request Capital".
+ * Columns, in order: Request ID, Timestamp, Type, Description,
+ * Quantity, Estimated Unit Cost, Total Estimated Cost, Justification.
+ */
+function appendBudgetRequestCapitalRows(ss, params) {
+  var lines = params.sections.capital;
+  if (lines.length === 0) return;
+
+  var sheet = ss.getSheetByName('Budget Request Capital');
+  if (!sheet) {
+    throw new Error('Sheet not found: "Budget Request Capital".');
+  }
+
+  var rows = lines.map(function (line) {
+    return [
+      params.requestId,
+      params.timestamp,
+      line.type || '',
+      line.description || '',
+      parseInt(line.quantity, 10) || 0,
+      parseFloat(line.unitCost) || 0,
+      parseFloat(line.totalCost) || 0,
+      line.justification || '',
+    ];
+  });
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+/**
  * Appends one row to "Grant Amendment Requests" — one row per request
  * (unlike Rollforward, a Grant Amendment always has exactly one Revenue
  * line and one Expense line, so both fit on the same row instead of
@@ -1173,6 +1547,109 @@ function buildRollforwardHtml(data, requestId, timestamp, lines, totalAmount) {
 }
 
 /**
+ * Builds the Budget Request PDF blob, attached to the county
+ * notification email.
+ */
+function buildBudgetRequestPdf(data, requestId, timestamp, sections, totals) {
+  var html = buildBudgetRequestHtml(data, requestId, timestamp, sections, totals);
+  var htmlBlob = Utilities.newBlob(html, 'text/html', 'budget-request.html');
+  var pdfBlob = htmlBlob.getAs('application/pdf');
+  pdfBlob.setName('Budget-Request-' + requestId + '.pdf');
+  return pdfBlob;
+}
+
+// A shared header block (requester/department/fiscal year) followed by one
+// heading + set of bordered blocks per non-empty section (New Staffing,
+// Vacancies, Operations, Contractual Services, Capital), plus a grand
+// total. Any section with zero lines is skipped entirely rather than
+// printing an empty heading.
+function buildBudgetRequestHtml(data, requestId, timestamp, sections, totals) {
+  var department = data.department || {};
+  var css = buildPdfCss();
+
+  function metaRow(label, value) {
+    return '<div class="meta"><b>' + escapeHtml(label) + ':</b> ' + escapeHtml(String(value)) + '</div>';
+  }
+
+  function section(heading, lines, buildBlock) {
+    if (lines.length === 0) return '';
+    return '<h2>' + escapeHtml(heading) + '</h2>' + lines.map(buildBlock).join('');
+  }
+
+  var newStaffingHtml = section('New Staffing Requests', sections.newStaffing, function (line, index) {
+    return '<div class="rf-line">'
+      + '<h3>New Position Request ' + (index + 1) + '</h3>'
+      + metaRow('Position Title', line.positionTitle || '—')
+      + metaRow('Number of Positions', line.numberOfPositions || '—')
+      + metaRow('Estimated Annual Cost', formatCurrency(parseFloat(line.estimatedAnnualCost) || 0))
+      + '<div class="meta"><b>Justification:</b></div>'
+      + '<div class="justification">' + escapeHtml(line.justification || '') + '</div>'
+      + '</div>';
+  });
+
+  var vacanciesHtml = section('Current Vacancies', sections.vacancies, function (line, index) {
+    return '<div class="rf-line">'
+      + '<h3>Vacant Position ' + (index + 1) + '</h3>'
+      + metaRow('Position Title', line.positionTitle || '—')
+      + (line.positionNumber ? metaRow('Position Number', line.positionNumber) : '')
+      + metaRow('Vacant Since', formatDateForDisplay(line.vacantSince))
+      + metaRow('Time Vacant', line.timeVacant || '—')
+      + metaRow('Plan to Fill', line.planToFill || '—')
+      + (line.notes ? metaRow('Notes', line.notes) : '')
+      + '</div>';
+  });
+
+  function accountBlock(heading, line, index) {
+    var account = line.account || {};
+    var accountNumber = buildAccountNumber(department.code, account, line.projectCode);
+    var currentBudget = parseFloat(line.currentFiscalYearBudget);
+    return '<div class="rf-line">'
+      + '<h3>' + escapeHtml(heading) + ' ' + (index + 1) + '</h3>'
+      + (line.vendorName ? metaRow('Vendor / Contractor Name', line.vendorName) : '')
+      + metaRow('Expense Account', accountNumber + (account.name ? ' - ' + account.name : ''))
+      + (line.projectCode ? metaRow('Project Number', line.projectCode) : '')
+      + (isFinite(currentBudget) ? metaRow('Current FY Budget', formatCurrency(currentBudget)) : '')
+      + metaRow('Requested Amount', formatCurrency(parseFloat(line.amount) || 0))
+      + '<div class="meta"><b>Justification:</b></div>'
+      + '<div class="justification">' + escapeHtml(line.justification || '') + '</div>'
+      + '</div>';
+  }
+
+  var operationsHtml = section('Operations', sections.operations, function (line, index) {
+    return accountBlock('Operating Line Item', line, index);
+  });
+  var contractualHtml = section('Contractual Services', sections.contractualServices, function (line, index) {
+    return accountBlock('Contractual Service', line, index);
+  });
+
+  var capitalHtml = section('Capital Requests', sections.capital, function (line, index) {
+    return '<div class="rf-line">'
+      + '<h3>Capital Item ' + (index + 1) + '</h3>'
+      + metaRow('Type', line.type || '—')
+      + metaRow('Description', line.description || '—')
+      + metaRow('Quantity', line.quantity || '—')
+      + metaRow('Estimated Unit Cost', formatCurrency(parseFloat(line.unitCost) || 0))
+      + metaRow('Total Estimated Cost', formatCurrency(parseFloat(line.totalCost) || 0))
+      + '<div class="meta"><b>Justification:</b></div>'
+      + '<div class="justification">' + escapeHtml(line.justification || '') + '</div>'
+      + '</div>';
+  });
+
+  return '<html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>'
+    + '<h1>Budget Request</h1>'
+    + '<div class="meta"><b>Request ID:</b> ' + escapeHtml(requestId) + '</div>'
+    + '<div class="meta"><b>Date:</b> ' + escapeHtml(formatDateForDisplay(data.date))
+      + '&nbsp;&nbsp;&nbsp;<b>Requester Name:</b> ' + escapeHtml(data.requesterName || '')
+      + '&nbsp;&nbsp;&nbsp;<b>Title:</b> ' + escapeHtml(data.title || '') + '</div>'
+    + '<div class="meta"><b>Requester Email:</b> ' + escapeHtml(data.requesterEmail || '') + '</div>'
+    + '<div class="meta"><b>Department:</b> ' + escapeHtml(formatDepartmentForDisplay(department)) + '</div>'
+    + '<div class="meta"><b>Fiscal Year:</b> ' + escapeHtml(data.fiscalYear || '') + '</div>'
+    + newStaffingHtml + vacanciesHtml + operationsHtml + contractualHtml + capitalHtml
+    + '<div class="total">Grand Total Requested: ' + formatCurrency(totals.grand) + '</div>'
+    + '</body></html>';
+}
+
+/**
  * Builds the Grant Amendment Request PDF blob, attached to the county
  * notification email. Mirrors buildRequestPdf()/buildRollforwardPdf()'s
  * shape — a single blob, never written to Drive, that exists only for
@@ -1285,6 +1762,56 @@ function sendRollforwardNotification(settings, data, requestId, timestamp, lines
   MailApp.sendEmail({
     to: settings.NotificationEmails.join(','),
     subject: 'Rollforward Request Submitted – Request #' + requestId,
+    body: body,
+    attachments: [pdfBlob],
+  });
+}
+
+/**
+ * Emails the submitted Budget Request's PDF to every address in
+ * Settings!NotificationEmails. Only the county notification sends; the
+ * requester is not emailed. The email body summarizes item counts and
+ * totals per section (any section with zero lines is omitted); full
+ * line-by-line detail is in the attached PDF.
+ */
+function sendBudgetRequestNotification(settings, data, requestId, timestamp, sections, totals, pdfBlob) {
+  if (settings.NotificationEmails.length === 0) return;
+
+  var department = data.department || {};
+
+  var sectionLines = [];
+  if (sections.newStaffing.length > 0) {
+    sectionLines.push('New Staffing Requests: ' + sections.newStaffing.length + ' position(s), ' + formatCurrency(totals.newStaffing));
+  }
+  if (sections.vacancies.length > 0) {
+    sectionLines.push('Current Vacancies: ' + sections.vacancies.length + ' position(s)');
+  }
+  if (sections.operations.length > 0) {
+    sectionLines.push('Operations: ' + sections.operations.length + ' line item(s), ' + formatCurrency(totals.operations));
+  }
+  if (sections.contractualServices.length > 0) {
+    sectionLines.push('Contractual Services: ' + sections.contractualServices.length + ' item(s), ' + formatCurrency(totals.contractualServices));
+  }
+  if (sections.capital.length > 0) {
+    sectionLines.push('Capital Requests: ' + sections.capital.length + ' item(s), ' + formatCurrency(totals.capital));
+  }
+
+  var body = 'A Budget Request has been submitted.\n\n'
+    + 'Request ID:\n' + requestId + '\n\n'
+    + 'Date:\n' + formatDateForDisplay(data.date) + '\n\n'
+    + 'Department:\n' + (department.name || '—') + '\n\n'
+    + sectionLines.join('\n') + '\n\n'
+    + 'Grand Total Requested:\n' + formatCurrency(totals.grand) + '\n\n'
+    + 'Requesting Funding For Fiscal Year:\n' + (data.fiscalYear || '') + '\n\n'
+    + 'Requester:\n' + (data.requesterName || '') + '\n\n'
+    + 'Title:\n' + (data.title || '') + '\n\n'
+    + 'Requester Email:\n' + (data.requesterEmail || '') + '\n\n'
+    + 'Submission Date:\n' + formatTimestampForEmail(timestamp) + '\n\n'
+    + 'See the attached PDF for full section-by-section detail and justifications.';
+
+  MailApp.sendEmail({
+    to: settings.NotificationEmails.join(','),
+    subject: 'Budget Request Submitted – Request #' + requestId,
     body: body,
     attachments: [pdfBlob],
   });

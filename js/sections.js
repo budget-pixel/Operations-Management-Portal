@@ -4,8 +4,9 @@
    hand-written markup. SECTIONS maps a <body data-page="..."> value
    to the list of cards that page shows — the home page's six module
    cards, plus each module's own landing page (Budget Management ->
-   Budget Request / Rollforward Request, etc). Adding a new module or
-   request type means adding an entry here, not editing HTML.
+   Budget Request / Transfer Request / Rollforward Request, etc). Adding
+   a new module or request type means adding an entry here, not editing
+   HTML.
 
    Exposes: window.BudgetApp.Sections
    ============================================================= */
@@ -58,9 +59,15 @@ window.BudgetApp.Sections = (function () {
     'budget-management': [
       {
         title: 'Budget Request',
+        description: 'Request funding for the next fiscal year.',
+        href: 'budget-request.html',
+        buttonLabel: 'Start Budget Request',
+      },
+      {
+        title: 'Transfer Request',
         description: 'Transfer existing budget between accounts or amend the current fiscal year budget.',
         href: 'transfer.html',
-        buttonLabel: 'Start Budget Request',
+        buttonLabel: 'Start Transfer Request',
       },
       {
         title: 'Rollforward Request',

@@ -716,7 +716,7 @@
   // Pop-up shown once the server accepts a submission — replaces the old
   // inline banner confirmation so the Request ID is impossible to miss.
   function showSubmissionModal(requestId) {
-    submissionModalBody.textContent = 'Your Budget Request has been submitted to the '
+    submissionModalBody.textContent = 'Your Transfer Request has been submitted to the '
       + 'Office of Management and Budget. Request ID: ' + requestId;
     submissionModal.hidden = false;
     submissionModalCloseBtn.focus();

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#003e28" />
+  <title>Budget Request</title>
+  <meta name="description" content="Request funding for the next fiscal year — staffing, operations, contractual services, and capital." />
+  <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="budget-management">
+
+  <header class="site-header no-print">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
+        <span class="brand-seal">
+          <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        </span>
+        <span class="brand-text">
+          <span class="brand-top">Walton County</span>
+          <span class="brand-bottom">Board of County Commissioners</span>
+        </span>
+      </a>
+      <nav id="siteNav" aria-label="Operations Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <div class="portal-page-heading">
+      <div class="page-eyebrow">Operations Management Portal</div>
+      <div class="portal-page-heading-row">
+        <h1>Budget Request</h1>
+        <button type="button" id="clearBtn" class="btn btn-danger no-print">Clear Form</button>
+      </div>
+    </div>
+
+    <p class="field-hint">
+      A department's full funding request for next fiscal year — staffing (new positions and
+      current vacancies), operations, contractual services, and capital (vehicles, equipment,
+      and infrastructure). Every section below is optional except Department and Fiscal Year;
+      leave a section empty if it doesn't apply.
+    </p>
+
+    <!-- Chart of Accounts load status (loading / error / loaded+refresh) -->
+    <div id="coaStatusBanner" class="banner banner-info no-print" hidden></div>
+
+    <!-- Submission status banner -->
+    <div id="statusBanner" class="banner no-print" hidden></div>
+
+    <form id="budgetRequestForm" novalidate>
+
+      <!-- Request information -->
+      <section class="card">
+        <h2 class="section-title">Request Information</h2>
+        <div class="card-body">
+          <div class="field">
+            <label for="date">Date <span class="required">*</span></label>
+            <input type="date" id="date" name="date" required />
+            <p class="error-text" id="date-error"></p>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <label for="requesterName">Requester Name <span class="required">*</span></label>
+              <input type="text" id="requesterName" name="requesterName" maxlength="50" required />
+              <p class="error-text" id="requesterName-error"></p>
+            </div>
+            <div class="field">
+              <label for="title">Title <span class="required">*</span></label>
+              <input type="text" id="title" name="title" maxlength="50" required />
+              <p class="error-text" id="title-error"></p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="requesterEmail">Requester Email <span class="required">*</span></label>
+            <input type="email" id="requesterEmail" name="requesterEmail" placeholder="you@waltoncountyfl.gov" maxlength="50" required />
+            <p class="error-text" id="requesterEmail-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Department + Fiscal Year — govern every section below. -->
+      <section class="card">
+        <h2 class="section-title">Department &amp; Fiscal Year</h2>
+        <div class="card-body">
+          <div class="field department-field">
+            <label for="departmentInput">Department <span class="required">*</span></label>
+            <div class="combobox" data-combobox="department">
+              <input type="text" id="departmentInput" class="department-input" placeholder="Search department by name or account..." aria-label="Department" maxlength="50" />
+              <button type="button" class="combobox-clear no-print" aria-label="Clear department selection" hidden>&times;</button>
+              <ul class="combobox-listbox" id="departmentInput-listbox" role="listbox" hidden></ul>
+            </div>
+            <p class="error-text" id="department-error"></p>
+          </div>
+
+          <div class="field">
+            <label for="fiscalYearSelect">Requesting Funding For Fiscal Year <span class="required">*</span></label>
+            <select id="fiscalYearSelect" required>
+              <option value="">Select a fiscal year...</option>
+            </select>
+            <p class="error-text" id="fiscalYear-error"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ STAFFING ============ -->
+
+      <!-- New Staffing Requests — one or more repeatable positions, each
+           with a Position Title, headcount, an estimated annual cost
+           (salary + benefits combined), and Justification. Rows are
+           injected/cloned from #newStaffingLineTemplate by
+           js/budgetRequest.js. -->
+      <section class="card">
+        <h2 class="section-title">New Staffing Requests</h2>
+        <div class="card-body">
+          <div id="newStaffingLines"><!-- line blocks injected by js/budgetRequest.js --></div>
+          <button type="button" id="addNewStaffingBtn" class="btn btn-ghost add-row-btn no-print">+ Add a New Position Request</button>
+          <div class="total-row">
+            <span>Total Estimated Annual Cost</span>
+            <span id="newStaffingTotal">$0.00</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Current Vacancies — one or more repeatable existing positions
+           that are currently vacant, so the Budget Office can see time
+           vacant alongside any new staffing asks. No dollar figure —
+           these are already-budgeted positions, not a new funding
+           request. Rows are injected/cloned from
+           #vacancyLineTemplate by js/budgetRequest.js. -->
+      <section class="card">
+        <h2 class="section-title">Current Vacancies</h2>
+        <div class="card-body">
+          <div id="vacancyLines"><!-- line blocks injected by js/budgetRequest.js --></div>
+          <button type="button" id="addVacancyBtn" class="btn btn-ghost add-row-btn no-print">+ Add a Vacant Position</button>
+        </div>
+      </section>
+
+      <!-- ============ OPERATIONS ============ -->
+
+      <!-- Operations — one or more repeatable expense-account line items,
+           each with its own searchable Expense Account combobox (see
+           js/accountSearch.js, js/expenses.js, scoped to the department
+           above), the current year's budget for reference, the amount
+           requested for next fiscal year, and Justification. Rows are
+           injected/cloned from #operationsLineTemplate by
+           js/budgetRequest.js. -->
+      <section class="card">
+        <h2 class="section-title">Operations</h2>
+        <div class="card-body">
+          <div id="operationsLines"><!-- line blocks injected by js/budgetRequest.js --></div>
+          <button type="button" id="addOperationsBtn" class="btn btn-ghost add-row-btn no-print">+ Add an Operating Line Item</button>
+          <div class="total-row">
+            <span>Total Requested</span>
+            <span id="operationsTotal">$0.00</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CONTRACTUAL SERVICES ============ -->
+
+      <!-- Contractual Services — same shape as Operations, plus a Vendor/
+           Contractor Name field. Rows are injected/cloned from
+           #contractualLineTemplate by js/budgetRequest.js. -->
+      <section class="card">
+        <h2 class="section-title">Contractual Services</h2>
+        <div class="card-body">
+          <div id="contractualLines"><!-- line blocks injected by js/budgetRequest.js --></div>
+          <button type="button" id="addContractualBtn" class="btn btn-ghost add-row-btn no-print">+ Add a Contractual Service</button>
+          <div class="total-row">
+            <span>Total Requested</span>
+            <span id="contractualTotal">$0.00</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CAPITAL REQUESTS ============ -->
+
+      <!-- Capital Requests — one or more repeatable capital items, each
+           tagged with a Type (New Vehicle / Replacement Vehicle /
+           Equipment / Infrastructure) rather than four separate
+           sections, since the fields needed are otherwise identical.
+           Rows are injected/cloned from #capitalLineTemplate by
+           js/budgetRequest.js. -->
+      <section class="card">
+        <h2 class="section-title">Capital Requests</h2>
+        <div class="card-body">
+          <div id="capitalLines"><!-- line blocks injected by js/budgetRequest.js --></div>
+          <button type="button" id="addCapitalBtn" class="btn btn-ghost add-row-btn no-print">+ Add a Capital Item</button>
+          <div class="total-row">
+            <span>Total Requested</span>
+            <span id="capitalTotal">$0.00</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Grand total across every dollar-figure section -->
+      <section class="card">
+        <div class="card-body">
+          <div class="total-row" style="font-size: 1.1rem;">
+            <span>Grand Total Requested</span>
+            <span id="grandTotal">$0.00</span>
+          </div>
+          <p class="field-hint">New Staffing + Operations + Contractual Services + Capital. Current Vacancies aren't included — they're already-budgeted positions, not a new funding request.</p>
+        </div>
+      </section>
+
+      <!-- Certification -->
+      <section class="card">
+        <h2 class="section-title">Certification</h2>
+        <div class="card-body">
+          <label class="checkbox-field">
+            <input type="checkbox" id="certification" required />
+            <span>I certify that the requested funding is necessary and that the justification provided is accurate.</span>
+          </label>
+          <p class="error-text" id="certification-error"></p>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div class="actions no-print">
+        <button type="submit" id="submitBtn" class="btn btn-primary">Submit Budget Request</button>
+        <button type="button" id="printBtn" class="btn btn-secondary">Print Form</button>
+      </div>
+
+    </form>
+
+    <!-- Print-only clerical entry view — populated by budgetRequest.js's
+         populatePrintView() right before window.print() is called. -->
+    <div id="printView" class="print-only">
+      <div class="print-header">
+        <img class="print-seal" src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        <div>
+          <h1>Budget Request</h1>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Date:</span> <span id="printDate"></span></span>
+            <span><span class="print-field-label">Requester Name:</span> <span id="printRequesterName"></span></span>
+            <span><span class="print-field-label">Title:</span> <span id="printTitle"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Requester Email:</span> <span id="printRequesterEmail"></span></span>
+          </div>
+          <div class="print-meta-row">
+            <span><span class="print-field-label">Department:</span> <span id="printDepartment"></span></span>
+            <span><span class="print-field-label">Fiscal Year:</span> <span id="printFiscalYear"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <div id="printSections"><!-- one heading + set of blocks per non-empty section, injected by js/budgetRequest.js --></div>
+
+      <div class="print-total">Grand Total Requested: <span id="printGrandTotal"></span></div>
+    </div>
+
+  </main>
+
+  <!-- New Staffing Request line template -->
+  <template id="newStaffingLineTemplate">
+    <div class="rollforward-line">
+      <div class="rollforward-line-header">
+        <span class="rollforward-line-title"></span>
+        <button type="button" class="remove-row-btn no-print" aria-label="Remove this position request" title="Remove this position request">&times;</button>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label class="line-position-title-label">Position Title <span class="required">*</span></label>
+          <input type="text" class="position-title-input" maxlength="80" placeholder="e.g., Maintenance Technician II" />
+          <p class="error-text position-title-error"></p>
+        </div>
+        <div class="field">
+          <label class="line-position-count-label">Number of Positions <span class="required">*</span></label>
+          <input type="text" class="position-count-input" inputmode="numeric" maxlength="3" placeholder="1" />
+          <p class="error-text position-count-error"></p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="line-annual-cost-label">Estimated Annual Cost (Salary + Benefits) <span class="required">*</span></label>
+        <input type="text" class="annual-cost-input" inputmode="decimal" placeholder="0.00" maxlength="13" />
+        <p class="error-text annual-cost-error"></p>
+      </div>
+
+      <div class="field">
+        <label class="line-justification-label">Justification <span class="required">*</span></label>
+        <textarea class="justification-input" rows="4" maxlength="250" placeholder="Explain the need for this new position..."></textarea>
+        <p class="error-text justification-error"></p>
+      </div>
+    </div>
+  </template>
+
+  <!-- Current Vacancy line template -->
+  <template id="vacancyLineTemplate">
+    <div class="rollforward-line">
+      <div class="rollforward-line-header">
+        <span class="rollforward-line-title"></span>
+        <button type="button" class="remove-row-btn no-print" aria-label="Remove this vacancy" title="Remove this vacancy">&times;</button>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label class="line-position-title-label">Position Title <span class="required">*</span></label>
+          <input type="text" class="position-title-input" maxlength="80" />
+          <p class="error-text position-title-error"></p>
+        </div>
+        <div class="field">
+          <label class="line-position-number-label">Position Number</label>
+          <input type="text" class="position-number-input" maxlength="20" placeholder="Optional" />
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label class="line-vacant-since-label">Vacant Since <span class="required">*</span></label>
+          <input type="date" class="vacant-since-input" />
+          <p class="error-text vacant-since-error"></p>
+        </div>
+        <div class="field">
+          <label class="line-time-vacant-label">Time Vacant</label>
+          <input type="text" class="time-vacant-display" disabled placeholder="—" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="line-plan-to-fill-label">Plan to Fill?</label>
+        <select class="plan-to-fill-select">
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+          <option value="Unsure">Unsure</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="line-notes-label">Notes</label>
+        <textarea class="notes-input" rows="3" maxlength="250" placeholder="Optional — recruitment status, plans to reclassify or hold vacant, etc."></textarea>
+      </div>
+    </div>
+  </template>
+
+  <!-- Operations line template -->
+  <template id="operationsLineTemplate">
+    <div class="rollforward-line">
+      <div class="rollforward-line-header">
+        <span class="rollforward-line-title"></span>
+        <button type="button" class="remove-row-btn no-print" aria-label="Remove this line item" title="Remove this line item">&times;</button>
+      </div>
+
+      <div class="field">
+        <label class="line-account-label">Expense Account <span class="required">*</span></label>
+        <div class="combobox" data-combobox="account">
+          <input type="text" class="account-input" placeholder="Select a department first..." aria-label="Expense Account" maxlength="50" disabled />
+          <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
+          <ul class="combobox-listbox" role="listbox" hidden></ul>
+        </div>
+        <p class="error-text account-error"></p>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label class="line-project-label">Project Number</label>
+          <input type="text" class="project-input" inputmode="numeric" maxlength="5" placeholder="Optional" />
+        </div>
+        <div class="field">
+          <label class="line-current-budget-label">Current FY Budget</label>
+          <input type="text" class="current-budget-input" inputmode="decimal" maxlength="13" placeholder="Optional, for reference" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="line-amount-label">Requested Amount <span class="required">*</span></label>
+        <input type="text" class="amount-input" inputmode="decimal" placeholder="0.00" maxlength="13" />
+        <p class="error-text amount-error"></p>
+      </div>
+
+      <div class="field">
+        <label class="line-justification-label">Justification <span class="required">*</span></label>
+        <textarea class="justification-input" rows="4" maxlength="250" placeholder="Explain why this funding is needed for next fiscal year..."></textarea>
+        <p class="error-text justification-error"></p>
+      </div>
+    </div>
+  </template>
+
+  <!-- Contractual Services line template — same shape as Operations plus
+       a Vendor/Contractor Name field. -->
+  <template id="contractualLineTemplate">
+    <div class="rollforward-line">
+      <div class="rollforward-line-header">
+        <span class="rollforward-line-title"></span>
+        <button type="button" class="remove-row-btn no-print" aria-label="Remove this contractual service" title="Remove this contractual service">&times;</button>
+      </div>
+
+      <div class="field">
+        <label class="line-vendor-label">Vendor / Contractor Name</label>
+        <input type="text" class="vendor-input" maxlength="80" placeholder="Optional" />
+      </div>
+
+      <div class="field">
+        <label class="line-account-label">Expense Account <span class="required">*</span></label>
+        <div class="combobox" data-combobox="account">
+          <input type="text" class="account-input" placeholder="Select a department first..." aria-label="Expense Account" maxlength="50" disabled />
+          <button type="button" class="combobox-clear no-print" aria-label="Clear account selection" hidden>&times;</button>
+          <ul class="combobox-listbox" role="listbox" hidden></ul>
+        </div>
+        <p class="error-text account-error"></p>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label class="line-project-label">Project Number</label>
+          <input type="text" class="project-input" inputmode="numeric" maxlength="5" placeholder="Optional" />
+        </div>
+        <div class="field">
+          <label class="line-current-budget-label">Current FY Budget</label>
+          <input type="text" class="current-budget-input" inputmode="decimal" maxlength="13" placeholder="Optional, for reference" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="line-amount-label">Requested Amount <span class="required">*</span></label>
+        <input type="text" class="amount-input" inputmode="decimal" placeholder="0.00" maxlength="13" />
+        <p class="error-text amount-error"></p>
+      </div>
+
+      <div class="field">
+        <label class="line-justification-label">Justification <span class="required">*</span></label>
+        <textarea class="justification-input" rows="4" maxlength="250" placeholder="Scope of service and why it's needed..."></textarea>
+        <p class="error-text justification-error"></p>
+      </div>
+    </div>
+  </template>
+
+  <!-- Capital Request line template — one Type dropdown covers New
+       Vehicle / Replacement Vehicle / Equipment / Infrastructure rather
+       than four separate sections. -->
+  <template id="capitalLineTemplate">
+    <div class="rollforward-line">
+      <div class="rollforward-line-header">
+        <span class="rollforward-line-title"></span>
+        <button type="button" class="remove-row-btn no-print" aria-label="Remove this capital item" title="Remove this capital item">&times;</button>
+      </div>
+
+      <div class="field">
+        <label class="line-type-label">Type <span class="required">*</span></label>
+        <select class="type-select">
+          <option value="">Select a type...</option>
+          <option value="New Vehicle">New Vehicle</option>
+          <option value="Replacement Vehicle">Replacement Vehicle</option>
+          <option value="Equipment">Equipment</option>
+          <option value="Infrastructure">Infrastructure</option>
+        </select>
+        <p class="error-text type-error"></p>
+      </div>
+
+      <div class="field">
+        <label class="line-description-label">Description <span class="required">*</span></label>
+        <input type="text" class="description-input" maxlength="120" placeholder="e.g., 2027 F-150, replacing unit #4412 (2014, 118k miles)" />
+        <p class="error-text description-error"></p>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label class="line-quantity-label">Quantity <span class="required">*</span></label>
+          <input type="text" class="quantity-input" inputmode="numeric" maxlength="4" placeholder="1" />
+          <p class="error-text quantity-error"></p>
+        </div>
+        <div class="field">
+          <label class="line-unit-cost-label">Estimated Unit Cost <span class="required">*</span></label>
+          <input type="text" class="unit-cost-input" inputmode="decimal" placeholder="0.00" maxlength="13" />
+          <p class="error-text unit-cost-error"></p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="line-total-cost-label">Total Estimated Cost</label>
+        <input type="text" class="total-cost-display" disabled placeholder="$0.00" />
+      </div>
+
+      <div class="field">
+        <label class="line-justification-label">Justification <span class="required">*</span></label>
+        <textarea class="justification-input" rows="4" maxlength="250" placeholder="Why this is needed, and if a replacement, condition of what's being replaced..."></textarea>
+        <p class="error-text justification-error"></p>
+      </div>
+    </div>
+  </template>
+
+  <!-- Submission confirmation pop-up — shown after a successful Submit
+       (see js/budgetRequest.js's showSubmissionModal()). -->
+  <div id="submissionModal" class="modal-overlay no-print" hidden>
+    <div class="modal-dialog" role="alertdialog" aria-modal="true" aria-labelledby="submissionModalTitle" aria-describedby="submissionModalBody">
+      <h2 id="submissionModalTitle">Request Submitted</h2>
+      <p id="submissionModalBody"></p>
+      <div class="modal-actions">
+        <button type="button" id="submissionModalCloseBtn" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load order matters: each module expects the ones before it to
+       already be attached to window.BudgetApp by the time it runs. -->
+  <script src="js/calculations.js"></script>
+  <script src="js/googleSheets.js"></script>
+  <script src="js/departments.js"></script>
+  <script src="js/expenses.js"></script>
+  <script src="js/accountSearch.js"></script>
+  <script src="js/validation.js"></script>
+  <script src="js/print.js"></script>
+  <script src="js/submission.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/budgetRequest.js"></script>
+</body>
+</html>
