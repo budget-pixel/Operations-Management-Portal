@@ -70,6 +70,7 @@ body {
   background:
     radial-gradient(circle at top left, rgba(209, 190, 120, 0.14), transparent 34rem),
     linear-gradient(180deg, #fbfcfa 0%, #f3f7f1 45%, #ffffff 100%);
+  background-repeat: no-repeat;
   color: var(--color-ink);
   font-family: var(--font-body);
   line-height: 1.5;
