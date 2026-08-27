@@ -276,6 +276,93 @@ Same column order convention as Rollforward Requests (`Timestamp` before
 via its `idColumnIndex` argument, so this only matters if you're building
 the sheet by hand rather than letting the script create rows for you.
 
+## 10. Set up Capital Improvement Projects (project-management module)
+
+`capital-projects.html` (linked from the Project Management module) reads
+and updates the county's **existing** `Capital Improvement Plan` tab. That
+tab already has one row per capital project with real budget-book columns
+(`Budget Project Name(s)`, `Dept`, `Budget Fund(s)`, `Project Phase`,
+`Project Priority`, `FY2027 Proposed`…`FY2031 Proposed`, `Total
+FY2027-FY2031`, and more) — the page reads all of it and displays it as a
+ledger, but only lets anyone correct **Project Phase** and **Status
+Notes** in place. Every other column (budget figures, fund, department,
+narrative, funding source, dates, etc.) is read-only on the page — edit
+those directly in the sheet.
+
+**This is a separate spreadsheet workbook from the Chart of Accounts one**
+used by §1–§9 above, so it needs its **own** Apps Script project and its
+**own** deployed Web App URL — it does not reuse `SHEETS_API_URL` or
+`Code.gs`. If your Capital Improvement Plan tab happens to live in the
+*same* workbook as your Chart of Accounts, you can skip straight to
+copying `CapitalProjectsCode.gs`'s functions into your existing `Code.gs`
+and reusing that one deployment instead — but for most counties, the
+budget-book workbook (the one your Capital Improvement Plan tab lives in)
+is maintained separately from the operational Chart of Accounts, so this
+guide assumes two workbooks.
+
+1. Open the **Capital Improvement Plan workbook** (not the Chart of
+   Accounts one).
+2. **Extensions → Apps Script**. If you see "This project has not been
+   deployed yet" under Deploy → Manage deployments, this confirms you're
+   in a fresh, undeployed script bound to this spreadsheet — expected the
+   first time.
+3. Delete any starter code in `Code.gs` (the default file name Apps
+   Script gives you — it's fine to leave it named that even though the
+   source file in this repo is called `CapitalProjectsCode.gs`), then
+   paste in the full contents of
+   [`apps-script/CapitalProjectsCode.gs`](apps-script/CapitalProjectsCode.gs)
+   from this repo. Save.
+4. **Deploy → New deployment** → gear icon → **Web app**. Execute as
+   **Me**, Who has access **Anyone**. Click **Deploy**, authorize when
+   prompted (only Sheets access is needed here — no Gmail scope, since
+   this script never sends email).
+5. Copy the **Web app URL** and paste it into `js/capitalProjects.js`'s
+   `CIP_API_URL` constant near the top of the file, replacing the
+   `PASTE_YOUR_CAPITAL_IMPROVEMENT_PLAN_WEB_APP_URL_HERE` placeholder.
+
+After the first deploy, future `CapitalProjectsCode.gs` edits need
+**Deploy → Manage deployments → (pencil) → New version → Deploy** to take
+effect on the same URL — same rule as `Code.gs` in §5 above.
+
+This tab is optional as far as `doGet` is concerned — if it doesn't exist
+in the connected workbook, `doGet` returns `{ error: ... }` and
+`capital-projects.html` shows a clear banner rather than a blank page.
+
+**Capital Improvement Plan** — the tab must already have this header row
+(exact text, County's existing budget-book columns):
+
+`Budget Project Name(s) | Dept | Budget Project Code(s) | Commissioner District | Estimated Completion Date | Budget Fund(s) | Funding Source | Location Name | Operational Impact | Pertinent Information | Project Manager | Project Narrative | Project Phase | Project Priority | Start Date | Strategic Goals | Budget Org Code(s) | Budget Account Code(s) | Budget Account Name(s) | In-House Engineering | FY2027 Proposed | FY2028 Proposed | FY2029 Proposed | FY2030 Proposed | FY2031 Proposed | Total FY2027-FY2031`
+
+Add **three new trailing columns** to support in-place status editing —
+appended at the end so the existing budget-book columns and any other tool
+reading this sheet are unaffected:
+
+`Status Notes | Last Updated | Last Updated By`
+
+- `Budget Project Name(s)` is the row-matching key — the page has no
+  separate ID column to work with, so it finds the row to update by exact
+  project name. Keep names unique (they already are in the live workbook).
+- `Budget Fund(s)`, `Project Phase`, and `Dept` drive the page's filter
+  dropdowns (options are built from whatever values already appear in the
+  sheet, so there's nothing else to configure).
+- `FY2027 Proposed`–`FY2031 Proposed` are each fiscal year's proposed
+  amount for that project; `Total FY2027-FY2031` is the all-years total.
+  All dollar columns accept plain numbers or currency-formatted cells.
+- `Project Phase` is free text on the sheet (the live data currently uses
+  `Identification`, `Design`, `Construction`, and blank/`None`), but the
+  page's dropdown offers: Identification, Design, Bidding, Construction,
+  On Hold, Complete, Cancelled, None. A value outside that list still shows
+  and stays selected — it's just not one of the dropdown's normal options
+  until changed.
+- `Status Notes`, `Last Updated`, and `Last Updated By` start out blank.
+  `Last Updated`/`Last Updated By` are written by the script on every edit
+  (current timestamp, and whatever `updatedBy` the page sends — v1 has no
+  login system, so this is currently blank).
+- Both reading and updating this sheet look up each column by its header
+  **text**, not position — so as long as every header above is present
+  with exact matching text, columns can be in any order or have other
+  columns mixed in.
+
 ## Troubleshooting
 
 - **"Chart of Accounts is not configured yet" banner** — `SHEETS_API_URL` in

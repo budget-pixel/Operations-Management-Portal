@@ -86,7 +86,14 @@ window.BudgetApp.Sections = (function () {
       },
     ],
 
-    'project-management': [],
+    'project-management': [
+      {
+        title: 'Capital Improvement Projects',
+        description: 'Track capital project budgets by fund and fiscal year, and update project status as work progresses.',
+        href: 'capital-projects.html',
+        buttonLabel: 'Open Capital Projects',
+      },
+    ],
     'asset-tracking': [],
 
     'work-orders': [

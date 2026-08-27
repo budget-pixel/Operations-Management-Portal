@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#003e28" />
+  <title>Capital Improvement Projects</title>
+  <meta name="description" content="Track capital project budgets by fund and fiscal year, and update project status." />
+  <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="project-management">
+
+  <header class="site-header no-print">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
+        <span class="brand-seal">
+          <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        </span>
+        <span class="brand-text">
+          <span class="brand-top">Walton County</span>
+          <span class="brand-bottom">Board of County Commissioners</span>
+        </span>
+      </a>
+      <nav id="siteNav" aria-label="Operations Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <div class="portal-page-heading">
+      <div class="page-eyebrow">Project Management</div>
+      <div class="portal-page-heading-row">
+        <h1>Capital Improvement Projects</h1>
+        <span class="no-print">
+          <a href="project-management.html" class="btn btn-ghost">Back to Project Management</a>
+        </span>
+      </div>
+      <p>Capital project budgets by fund across FY2027–FY2031, from the county's Capital Improvement Plan. Update a project's phase or status notes below — changes save directly to the ledger.</p>
+    </div>
+
+    <!-- Shown if the Capital Projects Google Sheets endpoint isn't
+         configured, or the "Capital Improvement Plan" tab doesn't exist yet. -->
+    <div id="apiStatusBanner" class="banner banner-error no-print" hidden></div>
+
+    <section class="card no-print">
+      <div class="card-body">
+        <div class="grid-2" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+          <div class="field">
+            <label for="fundFilter">Fund</label>
+            <select id="fundFilter">
+              <option value="All">All</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="phaseFilter">Phase</label>
+            <select id="phaseFilter">
+              <option value="All">All</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="deptFilter">Dept</label>
+            <select id="deptFilter">
+              <option value="All">All</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-body">
+        <div class="table-wrapper">
+          <table class="transfer-table">
+            <thead>
+              <tr>
+                <th>Project Name</th>
+                <th>Dept</th>
+                <th>Fund</th>
+                <th>Priority</th>
+                <th>FY2027</th>
+                <th>FY2028</th>
+                <th>FY2029</th>
+                <th>FY2030</th>
+                <th>FY2031</th>
+                <th>Total FY2027–FY2031</th>
+                <th class="no-print">Phase</th>
+                <th class="no-print">Status Notes</th>
+                <th>Last Updated</th>
+              </tr>
+            </thead>
+            <tbody id="capitalProjectsBody">
+              <tr><td colspan="13">Loading capital projects...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="js/nav.js"></script>
+  <script src="js/calculations.js"></script>
+  <script src="js/capitalProjects.js"></script>
+  <script src="js/capitalProjectsList.js"></script>
+</body>
+</html>
