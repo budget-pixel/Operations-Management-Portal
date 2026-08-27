@@ -139,6 +139,21 @@
     var select = document.createElement('select');
     var currentValue = project[field];
 
+    // A genuinely blank value must not silently render as the first real
+    // option looking selected (a <select> with nothing marked `selected`
+    // just shows its first option) — that misled the Fund kicker/badge
+    // display, which reads project.fund directly and correctly showed
+    // blank, while the dropdown right next to it appeared to have
+    // "Capital Projects Fund" picked. An explicit placeholder makes the
+    // unset state honest in the control itself.
+    if (!currentValue) {
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '— None —';
+      placeholder.selected = true;
+      select.appendChild(placeholder);
+    }
+
     options.forEach(function (option) {
       var optionEl = document.createElement('option');
       optionEl.value = option;
@@ -186,6 +201,70 @@
     return wrap;
   }
 
+  var MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+
+  // Normalizes a date-ish value to "January 2026" for display and for
+  // what gets saved back — handles the formats already found in the
+  // sheet (MM/YYYY, YYYY-MM, a bare year, a full date) by falling back to
+  // the browser's native Date parser. Anything that isn't parseable as a
+  // date at all (e.g. "TBD", blank) is left exactly as typed, since Start
+  // Date/Estimated Completion Date are still free text on the sheet, not
+  // a strict date column.
+  function formatMonthYear(value) {
+    var trimmed = String(value || '').trim();
+    if (!trimmed) return '';
+
+    var mmYyyy = /^(\d{1,2})\/(\d{4})$/.exec(trimmed);
+    if (mmYyyy) {
+      var mmIndex = parseInt(mmYyyy[1], 10) - 1;
+      if (mmIndex >= 0 && mmIndex <= 11) return MONTH_NAMES[mmIndex] + ' ' + mmYyyy[2];
+    }
+
+    var yyyyMm = /^(\d{4})-(\d{1,2})$/.exec(trimmed);
+    if (yyyyMm) {
+      var yIndex = parseInt(yyyyMm[2], 10) - 1;
+      if (yIndex >= 0 && yIndex <= 11) return MONTH_NAMES[yIndex] + ' ' + yyyyMm[1];
+    }
+
+    if (/\d/.test(trimmed)) {
+      var date = new Date(trimmed);
+      if (!isNaN(date.getTime())) {
+        return MONTH_NAMES[date.getUTCMonth()] + ' ' + date.getUTCFullYear();
+      }
+    }
+
+    return trimmed;
+  }
+
+  function buildMonthYearField(project, field, label) {
+    var wrap = el('div', 'cip-detail-field');
+    wrap.appendChild(el('label', null, label));
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'e.g. January 2026';
+    input.value = formatMonthYear(project[field]);
+
+    var savedNote = buildSavedNote();
+    input.addEventListener('blur', function () {
+      var formatted = formatMonthYear(input.value);
+      if (formatted === project[field]) {
+        input.value = formatted;
+        return;
+      }
+      var overrides = {};
+      overrides[field] = formatted;
+      saveProject(project, overrides, savedNote, function () { input.value = formatMonthYear(project[field]); });
+      input.value = formatted;
+    });
+
+    wrap.appendChild(input);
+    wrap.appendChild(savedNote);
+    return wrap;
+  }
+
   function buildTextareaField(project, field, label, rows) {
     var wrap = el('div', 'cip-detail-field');
     wrap.appendChild(el('label', null, label));
@@ -213,9 +292,9 @@
     return amountFormatter.format(value || 0);
   }
 
-  function buildYearRow(project, field) {
+  function buildYearRow(project, field, label) {
     var row = el('div', 'cip-detail-year-row');
-    row.appendChild(el('span', null, FY_LABELS[field]));
+    row.appendChild(el('span', null, label || FY_LABELS[field]));
 
     var input = document.createElement('input');
     input.type = 'text';
@@ -279,6 +358,27 @@
     return 'cip-public-status-planning'; // Identification, None, anything unrecognized
   }
 
+  // "Complete" reads the same whether it came from Phase or Status —
+  // historical entries mostly set Status, live proposed projects mostly
+  // set Phase, and either one means the stated amount is what was
+  // actually spent, not a proposal.
+  function isProjectComplete(project) {
+    return project.status === 'Complete' || project.phase === 'Complete';
+  }
+
+  // The single historical (FY2022-2026) field the "Current Budget"/
+  // "Actual Cost" row edits — the most recent year that already has a
+  // nonzero amount, or FY2026 if none do yet. Almost every historical
+  // project only ever has one non-zero year among the five, so this
+  // keeps a single editable line meaningful without needing five
+  // separate inputs back.
+  function primaryHistoricalField(project) {
+    for (var i = HISTORICAL_FY_FIELDS.length - 1; i >= 0; i--) {
+      if (project[HISTORICAL_FY_FIELDS[i]] > 0) return HISTORICAL_FY_FIELDS[i];
+    }
+    return 'fy2026';
+  }
+
   function allFyTotal(project) {
     return HISTORICAL_FY_FIELDS.concat(PROPOSED_FY_FIELDS)
       .reduce(function (sum, field) { return sum + (project[field] || 0); }, 0);
@@ -308,7 +408,7 @@
     var budgetPanel = el('div', 'cip-detail-panel');
     budgetPanel.appendChild(el('h2', null, 'Budget & Funding Summary'));
     var highlight = el('div', 'cip-detail-budget-highlight');
-    highlight.appendChild(el('span', null, 'Project Budget'));
+    highlight.appendChild(el('span', null, isProjectComplete(project) ? 'Actual Cost' : 'Project Budget'));
     highlight.appendChild(el('strong', null, Calculations.formatCurrency(allFyTotal(project))));
     budgetPanel.appendChild(highlight);
     var fundingItem = el('div', 'cip-detail-list-item');
@@ -369,8 +469,8 @@
     statusPanel.appendChild(statusHeading);
 
     var milestones = [];
-    if (project.startDate) milestones.push('Start: ' + project.startDate);
-    if (project.estCompletionDate) milestones.push('Est. Completion: ' + project.estCompletionDate);
+    if (project.startDate) milestones.push('Start: ' + formatMonthYear(project.startDate));
+    if (project.estCompletionDate) milestones.push('Est. Completion: ' + formatMonthYear(project.estCompletionDate));
     statusPanel.appendChild(el('p', null, milestones.length > 0
       ? milestones.join(' · ')
       : 'No dated project milestones are currently listed.'));
@@ -398,14 +498,15 @@
       btn.onclick = function () { setView(btn.dataset.view); };
     });
 
-    var category = el('div', 'cip-detail-category', project.fund || 'Capital Project');
-
     var hero = el('div', 'cip-detail-hero');
-    hero.appendChild(category);
-    hero.appendChild(el('h1', 'cip-detail-title', project.projectName));
-    var description = project.projectNarrative || project.operationalImpact
-      || 'Capital project tracked under the county’s Capital Improvement Plan.';
-    hero.appendChild(el('p', 'cip-detail-description', description));
+
+    var titleRow = el('div', 'cip-detail-hero-top');
+    titleRow.appendChild(el('h1', 'cip-detail-title', project.projectName));
+    var statusLabel = project.status || project.phase;
+    if (statusLabel) {
+      titleRow.appendChild(el('span', 'cip-public-badge ' + phaseBadgeClass(statusLabel), statusLabel));
+    }
+    hero.appendChild(titleRow);
 
     var kicker = el('div', 'cip-detail-kicker');
     kicker.appendChild(kickerItem('Fund', project.fund));
@@ -439,8 +540,8 @@
     detailsPanel.appendChild(buildSelectField(project, 'commissionerDistrict', 'Commissioner District', DISTRICT_OPTIONS));
     detailsPanel.appendChild(buildTextField(project, 'locationName', 'Location'));
     detailsPanel.appendChild(buildTextField(project, 'fundingSource', 'Funding Source'));
-    detailsPanel.appendChild(buildTextField(project, 'startDate', 'Start Date'));
-    detailsPanel.appendChild(buildTextField(project, 'estCompletionDate', 'Estimated Completion Date'));
+    detailsPanel.appendChild(buildMonthYearField(project, 'startDate', 'Start Date'));
+    detailsPanel.appendChild(buildMonthYearField(project, 'estCompletionDate', 'Estimated Completion Date'));
     detailsPanel.appendChild(buildTextField(project, 'inHouseEngineering', 'In-House Engineering'));
     leftStack.appendChild(detailsPanel);
 
@@ -449,29 +550,28 @@
     // Right column — budget + editable status.
     var rightStack = el('div', 'cip-detail-stack');
 
-    var totalHistorical = HISTORICAL_FY_FIELDS.reduce(function (sum, field) { return sum + (project[field] || 0); }, 0);
-
     var budgetPanel = el('div', 'cip-detail-panel');
     budgetPanel.appendChild(el('h2', null, 'Budget — FY2027–FY2031 (Proposed)'));
     var highlight = el('div', 'cip-detail-budget-highlight');
     highlight.appendChild(el('span', null, 'Total FY2027–FY2031'));
     highlight.appendChild(el('strong', null, Calculations.formatCurrency(project.totalFy2027to2031 || 0)));
     budgetPanel.appendChild(highlight);
+    // Prior-year (FY2022-2026) funding as a single editable summary line
+    // rather than its own panel with five separate rows — edits go to
+    // whichever historical year already carries the amount (see
+    // primaryHistoricalField), which covers the common case of a project
+    // only ever having one non-zero historical year. Labeled "Actual
+    // Cost" once the project is marked Complete, since a finished
+    // project's amount is what was spent, not a proposal.
+    budgetPanel.appendChild(buildYearRow(
+      project,
+      primaryHistoricalField(project),
+      isProjectComplete(project) ? 'Actual Cost' : 'Current Budget'
+    ));
     PROPOSED_FY_FIELDS.forEach(function (field) {
       budgetPanel.appendChild(buildYearRow(project, field));
     });
     rightStack.appendChild(budgetPanel);
-
-    var historicalBudgetPanel = el('div', 'cip-detail-panel');
-    historicalBudgetPanel.appendChild(el('h2', null, 'Budget — FY2022–FY2026 (Historical)'));
-    var historicalHighlight = el('div', 'cip-detail-budget-highlight');
-    historicalHighlight.appendChild(el('span', null, 'Total FY2022–FY2026'));
-    historicalHighlight.appendChild(el('strong', null, Calculations.formatCurrency(totalHistorical)));
-    historicalBudgetPanel.appendChild(historicalHighlight);
-    HISTORICAL_FY_FIELDS.forEach(function (field) {
-      historicalBudgetPanel.appendChild(buildYearRow(project, field));
-    });
-    rightStack.appendChild(historicalBudgetPanel);
 
     var statusPanel = el('div', 'cip-detail-panel');
     statusPanel.appendChild(el('h2', null, 'Status'));
