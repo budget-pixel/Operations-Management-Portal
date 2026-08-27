@@ -59,6 +59,49 @@
 
   var allProjects = [];
 
+  // Persists the current search/filter/year-pill selection across
+  // navigation (sessionStorage, so it's per-tab and clears when the tab
+  // closes) — restored on load so clicking into a project and back (or
+  // "Refresh Data") lands back on the same filtered view instead of
+  // resetting to defaults.
+  var FILTER_STATE_KEY = 'capitalProjectsFilterState_v1';
+
+  function saveFilterState() {
+    try {
+      sessionStorage.setItem(FILTER_STATE_KEY, JSON.stringify({
+        search: searchInput.value,
+        fund: fundFilter.value,
+        phase: phaseFilter.value,
+        dept: deptFilter.value,
+        status: statusFilter.value,
+        year: selectedYear,
+      }));
+    } catch (err) {
+      // Storage full or unavailable — filters just won't persist.
+    }
+  }
+
+  function readFilterState() {
+    try {
+      var raw = sessionStorage.getItem(FILTER_STATE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // Sets a <select>'s value only if that option actually exists (the
+  // saved state may name a Fund/Phase/Dept/Status that isn't among this
+  // load's populated options) — otherwise leaves it on "All" rather than
+  // silently failing to select anything.
+  function restoreSelectValue(select, value) {
+    if (!value) return;
+    var hasOption = Array.prototype.some.call(select.options, function (option) {
+      return option.value === value;
+    });
+    if (hasOption) select.value = value;
+  }
+
   function showApiError(message) {
     apiStatusBanner.className = 'banner banner-error no-print';
     apiStatusBanner.textContent = message;
@@ -158,6 +201,7 @@
 
   function loadProjects(forceRefresh) {
     tbody.innerHTML = '<tr><td colspan="5">Loading capital projects...</td></tr>';
+    var savedState = readFilterState();
     var request = forceRefresh ? CapitalProjects.refresh() : CapitalProjects.getProjects();
     request
       .then(function (projects) {
@@ -179,6 +223,12 @@
         var extraStatuses = uniqueSorted(projects.map(function (p) { return p.status; }))
           .filter(function (status) { return STATUS_OPTIONS.indexOf(status) === -1; });
         populateFilter(statusFilter, STATUS_OPTIONS.concat(extraStatuses));
+
+        restoreSelectValue(fundFilter, savedState && savedState.fund);
+        restoreSelectValue(phaseFilter, savedState && savedState.phase);
+        restoreSelectValue(deptFilter, savedState && savedState.dept);
+        restoreSelectValue(statusFilter, savedState && savedState.status);
+
         if (projects.length === 0) {
           showApiError(
             'No capital projects found. Check that the "Capital Improvement Plan" tab exists in the '
@@ -194,10 +244,32 @@
   }
 
   function init() {
+    // Search box and the year pill row don't depend on data being loaded
+    // first (unlike the Fund/Phase/Dept/Status <select>s, whose options
+    // are only populated once projects come back — see restoreSelectValue
+    // in loadProjects), so they're restored immediately.
+    var savedState = readFilterState();
+    if (savedState) {
+      searchInput.value = savedState.search || '';
+      if (savedState.year) {
+        selectedYear = savedState.year;
+        yearFilterPills.querySelectorAll('.cip-year-pill').forEach(function (pill) {
+          pill.classList.toggle('is-active', pill.dataset.year === selectedYear);
+        });
+      }
+    }
+
     loadProjects();
-    searchInput.addEventListener('input', applyFilters);
+
+    searchInput.addEventListener('input', function () {
+      applyFilters();
+      saveFilterState();
+    });
     [fundFilter, phaseFilter, deptFilter, statusFilter].forEach(function (select) {
-      select.addEventListener('change', applyFilters);
+      select.addEventListener('change', function () {
+        applyFilters();
+        saveFilterState();
+      });
     });
 
     yearFilterPills.querySelectorAll('.cip-year-pill').forEach(function (pill) {
@@ -207,6 +279,7 @@
           other.classList.toggle('is-active', other === pill);
         });
         applyFilters();
+        saveFilterState();
       });
     });
 
