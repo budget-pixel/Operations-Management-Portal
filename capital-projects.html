@@ -5,9 +5,82 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#003e28" />
   <title>Capital Improvement Projects</title>
-  <meta name="description" content="Track capital project budgets by fund and fiscal year, and update project status." />
+  <meta name="description" content="Browse capital projects by department, fund, and phase." />
   <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
   <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* Wider than the site's usual .page max-width (1140px) — this page's
+       filter row and table need more breathing room; scoped to this file
+       only (not the shared .page rule) so other pages are unaffected. */
+    .page.cip-page-wide {
+      max-width: 1500px;
+    }
+
+    /* Year pill row — mirrors the fiscal-year tab bar on the county's
+       public CIP pages (budgetv2's cip-*.html), which use one button per
+       year instead of a dropdown. */
+    .cip-year-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+    .cip-year-pill {
+      flex: 1 1 0;
+      min-width: 100px;
+      text-align: center;
+      padding: 12px 16px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--color-line);
+      background: var(--color-bg);
+      color: var(--color-ink);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .cip-year-pill:hover {
+      border-color: var(--color-green);
+    }
+    /* Project name link — matches the county's public CIP pages
+       (budgetv2's .wc-cip-project-link): bold dark green, no underline
+       until hover, with a trailing arrow to read as a link into more
+       detail rather than plain text. */
+    .cip-project-link {
+      color: var(--color-green-3);
+      font-weight: 800;
+      text-decoration: none;
+      text-underline-offset: 3px;
+    }
+    .cip-project-link:hover {
+      text-decoration: underline;
+    }
+    .cip-project-link::after {
+      content: " \2192";
+    }
+
+    /* Row lines — the shared .transfer-table (used on several other pages
+       for line-item entry) has no row borders by default; scoped here to
+       just this table so those other pages are unaffected. */
+    #capitalProjectsBody td {
+      padding-top: 0.6rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--color-line);
+    }
+    #capitalProjectsBody tr:last-child td {
+      border-bottom: none;
+    }
+    .transfer-table thead tr th {
+      border-bottom: 1px solid var(--color-line);
+      padding-bottom: 0.6rem;
+    }
+
+    .cip-year-pill.is-active {
+      background: var(--color-green);
+      border-color: var(--color-green);
+      color: #ffffff;
+    }
+  </style>
 </head>
 <body data-page="project-management">
 
@@ -29,17 +102,19 @@
     </div>
   </header>
 
-  <main class="page">
+  <main class="page cip-page-wide">
 
     <div class="portal-page-heading">
       <div class="page-eyebrow">Project Management</div>
       <div class="portal-page-heading-row">
         <h1>Capital Improvement Projects</h1>
-        <span class="no-print">
-          <a href="project-management.html" class="btn btn-ghost">Back to Project Management</a>
+        <span class="no-print" style="display: flex; gap: 0.75rem;">
+          <a href="capital-project.html?new=1" class="btn btn-primary">New Project</a>
+          <button type="button" id="refreshProjectsBtn" class="btn btn-ghost">Refresh Data</button>
+          <a href="index.html" class="btn btn-ghost">Back to Home</a>
         </span>
       </div>
-      <p>Capital project budgets by fund across FY2027–FY2031, from the county's Capital Improvement Plan. Update a project's phase or status notes below — changes save directly to the ledger.</p>
+      <p>Capital projects from the county's Capital Improvement Plan, FY2022–FY2031 — historical and currently proposed projects together. Select a project to view full details and update its status. If you've just edited the spreadsheet directly, click <strong>Refresh Data</strong> to pick up the change.</p>
     </div>
 
     <!-- Shown if the Capital Projects Google Sheets endpoint isn't
@@ -48,6 +123,22 @@
 
     <section class="card no-print">
       <div class="card-body">
+        <div class="field" style="margin-bottom: 1rem;">
+          <label for="searchInput">Search Project Name</label>
+          <input type="search" id="searchInput" placeholder="Search by project name…" />
+        </div>
+        <div class="field" style="margin-bottom: 1rem;">
+          <label>Funded in Year</label>
+          <div class="cip-year-pills" id="yearFilterPills" role="group" aria-label="Filter by funded year">
+            <button type="button" class="cip-year-pill is-active" data-year="All">All</button>
+            <button type="button" class="cip-year-pill" data-year="past">Past CIP</button>
+            <button type="button" class="cip-year-pill" data-year="fy2027">FY 2027</button>
+            <button type="button" class="cip-year-pill" data-year="fy2028">FY 2028</button>
+            <button type="button" class="cip-year-pill" data-year="fy2029">FY 2029</button>
+            <button type="button" class="cip-year-pill" data-year="fy2030">FY 2030</button>
+            <button type="button" class="cip-year-pill" data-year="fy2031">FY 2031</button>
+          </div>
+        </div>
         <div class="grid-2" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
           <div class="field">
             <label for="fundFilter">Fund</label>
@@ -67,6 +158,12 @@
               <option value="All">All</option>
             </select>
           </div>
+          <div class="field">
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter">
+              <option value="All">All</option>
+            </select>
+          </div>
         </div>
       </div>
     </section>
@@ -78,22 +175,14 @@
             <thead>
               <tr>
                 <th>Project Name</th>
-                <th>Dept</th>
                 <th>Fund</th>
-                <th>Priority</th>
-                <th>FY2027</th>
-                <th>FY2028</th>
-                <th>FY2029</th>
-                <th>FY2030</th>
-                <th>FY2031</th>
-                <th>Total FY2027–FY2031</th>
-                <th class="no-print">Phase</th>
-                <th class="no-print">Status Notes</th>
-                <th>Last Updated</th>
+                <th>Phase</th>
+                <th>Status</th>
+                <th>Total Budget</th>
               </tr>
             </thead>
             <tbody id="capitalProjectsBody">
-              <tr><td colspan="13">Loading capital projects...</td></tr>
+              <tr><td colspan="5">Loading capital projects...</td></tr>
             </tbody>
           </table>
         </div>

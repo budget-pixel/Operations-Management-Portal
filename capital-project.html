@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#003e28" />
+  <title>Capital Project Detail</title>
+  <meta name="description" content="Capital improvement project detail — budget, phase, and status." />
+  <link rel="icon" type="image/png" href="assets/images/walton-county-seal.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* Scoped to this page — modeled on the county's public CIP project
+       page (budgetv2's cip-project.html), adapted to this portal's own
+       card/color system (--color-green etc., the same green budgetv2
+       uses) and made editable, since this is the internal page staff
+       correct project status from rather than a public read-only page. */
+    /* Wider than budgetv2's public cip-project.html (max-width:1040px) —
+       that page is read-only with far less on screen per panel; this one
+       has editable fields in every panel and benefits from more room.
+       Also overrides the site's usual .page max-width (1140px), scoped
+       to this file only. */
+    .page.cip-detail-page { max-width: 1400px; }
+    .cip-detail { max-width: 1400px; margin: 0 auto; }
+
+    .cip-detail-actions {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 14px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+
+    .cip-detail-category {
+      display: inline-flex; align-items: center; padding: 8px 14px;
+      border-radius: 999px; background: var(--color-green-bg); color: var(--color-green);
+      font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    .cip-detail-hero-top {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+    }
+    .cip-detail-hero-top .cip-detail-category { margin-bottom: 0; }
+
+    .cip-detail-hero {
+      background: var(--color-bg); border-radius: 16px; padding: 24px 28px;
+      margin-bottom: 18px; border: 1px solid var(--color-line);
+      box-shadow: 0 18px 44px rgba(0,98,49,0.08), 0 6px 14px rgba(36,52,77,0.06);
+    }
+
+    .cip-detail-title { margin: 0; font-size: 34px; line-height: 1.12; font-weight: 800; color: var(--color-ink); }
+    .cip-detail-description { font-size: 15px; line-height: 1.62; color: var(--color-muted); max-width: 920px; margin-top: 12px; }
+
+    .cip-detail-kicker {
+      display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px;
+      margin-top: 28px; margin-bottom: 32px;
+    }
+    .cip-detail-kicker-item {
+      padding: 18px; border-radius: 18px; background: var(--color-green);
+      border: 1px solid var(--color-green); box-shadow: 0 10px 22px rgba(0,98,49,0.18);
+    }
+    .cip-detail-kicker-item span {
+      display: block; margin-bottom: 7px; color: rgba(255,255,255,0.72);
+      font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    }
+    .cip-detail-kicker-item strong { display: block; color: #ffffff; font-size: 15px; line-height: 1.35; }
+
+    .cip-detail-grid { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(280px,.8fr); gap: 16px; }
+
+    .cip-detail-panel {
+      background: var(--color-bg); border-radius: 14px; padding: 18px;
+      border: 1px solid var(--color-line);
+      box-shadow: 0 10px 24px rgba(0,98,49,0.07), 0 3px 9px rgba(36,52,77,0.05);
+      margin-bottom: 16px;
+    }
+    .cip-detail-panel h2 { margin: 0 0 14px; font-size: 17px; color: var(--color-ink); }
+    .cip-detail-panel p { margin: 0; font-size: 14px; line-height: 1.62; color: var(--color-muted); text-align: justify; }
+
+    .cip-detail-stack { display: flex; flex-direction: column; gap: 16px; }
+
+    .cip-detail-list { display: flex; flex-direction: column; gap: 8px; }
+    .cip-detail-list-item {
+      display: flex; justify-content: space-between; gap: 14px; padding: 10px 0;
+      border-bottom: 1px solid var(--color-line);
+    }
+    .cip-detail-list-item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .cip-detail-list-item span {
+      color: var(--color-muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    }
+    .cip-detail-list-item strong { color: var(--color-ink); font-size: 13px; line-height: 1.4; text-align: right; }
+
+    .cip-detail-budget-highlight {
+      padding: 16px; border-radius: 12px; background: var(--color-green);
+      border: 1px solid var(--color-green); margin-bottom: 12px; box-shadow: 0 10px 20px rgba(0,98,49,0.16);
+    }
+    .cip-detail-budget-highlight span {
+      display: block; margin-bottom: 8px; color: rgba(255,255,255,0.72);
+      font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    }
+    .cip-detail-budget-highlight strong { display: block; color: #ffffff; font-size: 23px; line-height: 1.2; }
+
+    .cip-detail-year-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 9px 11px; border-radius: 10px; background: var(--color-soft);
+      border: 1px solid var(--color-line); margin-bottom: 8px;
+    }
+    .cip-detail-year-row span {
+      color: var(--color-muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      flex: 0 0 auto;
+    }
+    .cip-detail-year-row input { max-width: 9rem; text-align: right; }
+
+    .cip-detail-field { margin-bottom: 14px; }
+    .cip-detail-field label {
+      display: block; margin-bottom: 6px; color: var(--color-muted);
+      font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    }
+    .cip-detail-field select,
+    .cip-detail-field input,
+    .cip-detail-field textarea { width: 100%; }
+
+    .cip-detail-not-found { text-align: center; padding: 80px 20px; }
+
+    /* View toggle — Edit View (this page's normal editable form) vs.
+       Public Preview (a read-only rendering matching what the public CIP
+       site shows for this project, so staff can see it before anyone
+       else does). Both views share the .cip-detail-* panel/hero/grid/
+       budget-highlight/year-row classes above for visual consistency;
+       the preview just never puts an <input>/<select> inside them. */
+    .cip-view-toggle { display: flex; gap: 8px; }
+    .cip-view-toggle button.is-active {
+      background: var(--color-green); border-color: var(--color-green); color: #ffffff;
+    }
+    #cipPublicPreview { display: none; }
+    #cipPublicPreview .cip-detail-hero { border-color: var(--color-gold); }
+
+    .cip-public-badge {
+      display: inline-flex; align-items: center; padding: 7px 11px; border-radius: 999px;
+      font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    }
+    .cip-public-status-planning { background: rgba(209,190,120,0.18); color: #8b6d12; }
+    .cip-public-status-design { background: rgba(90,110,127,0.12); color: #5a6e7f; }
+    .cip-public-status-construction { background: rgba(23,91,145,0.12); color: #175b91; }
+    .cip-public-status-complete { background: rgba(0,98,49,0.12); color: var(--color-green); }
+
+    @media (max-width: 900px) {
+      .cip-detail-grid { grid-template-columns: 1fr; }
+      .cip-detail-title { font-size: 28px; }
+      .cip-detail-kicker { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 700px) {
+      .cip-detail-hero, .cip-detail-panel { padding: 16px; border-radius: 14px; }
+      .cip-detail-title { font-size: 24px; }
+      .cip-detail-kicker { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body data-page="project-management">
+
+  <header class="site-header no-print">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="Walton County Board of County Commissioners home">
+        <span class="brand-seal">
+          <img src="assets/images/walton-county-seal.png" alt="Walton County, Florida seal" />
+        </span>
+        <span class="brand-text">
+          <span class="brand-top">Walton County</span>
+          <span class="brand-bottom">Board of County Commissioners</span>
+        </span>
+      </a>
+      <nav id="siteNav" aria-label="Operations Management Portal"></nav>
+      <button type="button" class="nav-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page cip-detail-page">
+    <div class="cip-detail">
+      <div class="cip-detail-actions no-print">
+        <a href="capital-projects.html" class="btn btn-ghost">← Back to Capital Projects</a>
+        <div class="cip-view-toggle" id="cipViewToggle" role="group" aria-label="Switch view" hidden>
+          <button type="button" class="btn btn-ghost is-active" data-view="edit">Edit View</button>
+          <button type="button" class="btn btn-ghost" data-view="public">Public Preview</button>
+        </div>
+      </div>
+
+      <div id="apiStatusBanner" class="banner banner-error no-print" hidden></div>
+
+      <div id="cipDetailContent"></div>
+      <div id="cipPublicPreview"></div>
+    </div>
+  </main>
+
+  <script src="js/nav.js"></script>
+  <script src="js/calculations.js"></script>
+  <script src="js/capitalProjects.js"></script>
+  <script src="js/capitalProjectDetail.js"></script>
+</body>
+</html>

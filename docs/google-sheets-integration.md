@@ -278,16 +278,23 @@ the sheet by hand rather than letting the script create rows for you.
 
 ## 10. Set up Capital Improvement Projects (project-management module)
 
-`capital-projects.html` (linked from the Project Management module) reads
-and updates the county's **existing** `Capital Improvement Plan` tab. That
-tab already has one row per capital project with real budget-book columns
-(`Budget Project Name(s)`, `Dept`, `Budget Fund(s)`, `Project Phase`,
-`Project Priority`, `FY2027 Proposed`…`FY2031 Proposed`, `Total
-FY2027-FY2031`, and more) — the page reads all of it and displays it as a
-ledger, but only lets anyone correct **Project Phase** and **Status
-Notes** in place. Every other column (budget figures, fund, department,
-narrative, funding source, dates, etc.) is read-only on the page — edit
-those directly in the sheet.
+`capital-projects.html` (a browsable list, linked from the Project
+Management module) and `capital-project.html` (the per-project detail/edit
+page it links into) read and update the county's **existing** `Capital
+Improvement Plan` tab. That tab has one row per capital project with real
+budget-book columns (`Budget Project Name(s)`, `Dept`, `Budget Fund(s)`,
+`Project Phase`, `Project Priority`, `FY2027 Proposed`…`FY2031 Proposed`,
+and more) — plus, after §10's setup below, five more FY columns
+(`FY2022 Proposed`…`FY2026 Proposed`) and a `Status` column so the
+county's FY2022-2026 historical project record lives in this same
+tab/sheet as the live FY2027-2031 projects, not a separate one. Nearly
+every field is editable from `capital-project.html`: Project Phase,
+Status, Dept, Priority, Project Narrative, Operational Impact, Pertinent
+Information, Strategic Goals, Project Code, Project Manager, Commissioner
+District, Location, Funding Source, Start Date, Estimated Completion
+Date, In-House Engineering, all ten FY Proposed amounts, and Status
+Notes. Only Fund, Budget Org Code, and Budget Account Code/Name stay
+read-only-via-the-page (edit those directly in the sheet).
 
 **This is a separate spreadsheet workbook from the Chart of Accounts one**
 used by §1–§9 above, so it needs its **own** Apps Script project and its
@@ -329,31 +336,37 @@ in the connected workbook, `doGet` returns `{ error: ... }` and
 `capital-projects.html` shows a clear banner rather than a blank page.
 
 **Capital Improvement Plan** — the tab must already have this header row
-(exact text, County's existing budget-book columns):
+(exact text, county's existing budget-book columns):
 
 `Budget Project Name(s) | Dept | Budget Project Code(s) | Commissioner District | Estimated Completion Date | Budget Fund(s) | Funding Source | Location Name | Operational Impact | Pertinent Information | Project Manager | Project Narrative | Project Phase | Project Priority | Start Date | Strategic Goals | Budget Org Code(s) | Budget Account Code(s) | Budget Account Name(s) | In-House Engineering | FY2027 Proposed | FY2028 Proposed | FY2029 Proposed | FY2030 Proposed | FY2031 Proposed | Total FY2027-FY2031`
 
-Add **three new trailing columns** to support in-place status editing —
-appended at the end so the existing budget-book columns and any other tool
-reading this sheet are unaffected:
+Add **nine new trailing columns** — appended at the end so the existing
+budget-book columns and any other tool reading this sheet are unaffected:
 
-`Status Notes | Last Updated | Last Updated By`
+`Status | FY2022 Proposed | FY2023 Proposed | FY2024 Proposed | FY2025 Proposed | FY2026 Proposed | Status Notes | Last Updated | Last Updated By`
 
 - `Budget Project Name(s)` is the row-matching key — the page has no
   separate ID column to work with, so it finds the row to update by exact
   project name. Keep names unique (they already are in the live workbook).
-- `Budget Fund(s)`, `Project Phase`, and `Dept` drive the page's filter
-  dropdowns (options are built from whatever values already appear in the
-  sheet, so there's nothing else to configure).
-- `FY2027 Proposed`–`FY2031 Proposed` are each fiscal year's proposed
-  amount for that project; `Total FY2027-FY2031` is the all-years total.
-  All dollar columns accept plain numbers or currency-formatted cells.
+- `Budget Fund(s)`, `Project Phase`, `Status`, and `Dept` drive the page's
+  filter dropdowns (options are built from whatever values already appear
+  in the sheet, so there's nothing else to configure).
+- `FY2022 Proposed`–`FY2026 Proposed` are each fiscal year's amount for
+  the county's **historical** project record (see the one-time import
+  below); `FY2027 Proposed`–`FY2031 Proposed` are the **live proposed**
+  CIP's amounts, exactly as before. `Total FY2027-FY2031` stays the live
+  proposed total — there's no `Total FY2022-FY2026` column; the page
+  computes that total itself from the five historical columns. All dollar
+  columns accept plain numbers or currency-formatted cells.
 - `Project Phase` is free text on the sheet (the live data currently uses
   `Identification`, `Design`, `Construction`, and blank/`None`), but the
   page's dropdown offers: Identification, Design, Bidding, Construction,
-  On Hold, Complete, Cancelled, None. A value outside that list still shows
-  and stays selected — it's just not one of the dropdown's normal options
-  until changed.
+  On Hold, Complete, Cancelled, None. `Status` is a separate concept —
+  whether the work is *finished*, not what lifecycle stage it's in — with
+  its own dropdown: Programmed, In Progress, Complete, Cancelled, None.
+  Either field showing a value outside its dropdown's list still displays
+  and stays selected — it's just not one of the normal options until
+  changed.
 - `Status Notes`, `Last Updated`, and `Last Updated By` start out blank.
   `Last Updated`/`Last Updated By` are written by the script on every edit
   (current timestamp, and whatever `updatedBy` the page sends — v1 has no
@@ -362,6 +375,52 @@ reading this sheet are unaffected:
   **text**, not position — so as long as every header above is present
   with exact matching text, columns can be in any order or have other
   columns mixed in.
+- Updates are **partial**: `capital-project.html` sends only the field(s)
+  actually edited, and `handleCapitalProjectUpdate` only writes the
+  columns present in that request — every other column, including every
+  other *editable* one, is left completely untouched by that save. This
+  is deliberate (see the comment on that function in `CapitalProjectsCode.gs`)
+  — an earlier full-snapshot design could silently revert a just-saved
+  value to a stale one when two edits landed close together or the page's
+  local copy was out of date.
+
+### Importing the FY2022-FY2026 historical project record
+
+After adding the nine columns above, you can bulk-load the county's 161
+historical capital projects (FY2022-FY2026, sourced from the County's
+5-year work plans and general ledger — see
+[`apps-script/historical-cip-source-data.js`](apps-script/historical-cip-source-data.js)
+for full per-project citations) into this same sheet, as additional rows
+alongside the live FY2027-2031 projects:
+
+1. In the Apps Script editor (the same project you pasted
+   `CapitalProjectsCode.gs` into), use the function dropdown next to
+   **Run** to select **importHistoricalCipProjects**, then click **Run**.
+2. Authorize if prompted (Sheets access only).
+3. Check **Executions** (left sidebar) or **View → Logs** for a summary
+   line like `Imported 161 historical projects, skipped 0`.
+
+This is a one-time, manually-triggered function — **not** reachable
+through `doGet`/`doPost` (the public web endpoint), specifically so the
+website itself can never be used to bulk-inject rows. It's also safe to
+re-run: any project name already present in the sheet is skipped, so
+running it again (by mistake, or after adding more entries to
+`HISTORICAL_CIP_PROJECTS` later) won't create duplicates. Historical
+entries only carry a broad grouping (Transportation & Public Works,
+Grant Funded, Sheriff's Office), not a real department, so the import
+maps `Sheriff's Office` → `Sheriff` and everything else → `Public Works`
+for `Dept`, while preserving the original grouping label in `Funding
+Source` so it's still visible on the page.
+
+**If you ran the import before the `Status` column existed (or before
+its header text exactly matched `Status`)** — every historical row's
+Status will show blank, and re-running `importHistoricalCipProjects`
+won't fix it (it skips names already on the sheet, Status included).
+Instead, once the `Status` column is correctly in place, run
+**backfillHistoricalStatus** the same way (function dropdown → Run). It
+patches only the `Status` cell, only for historical rows whose Status is
+currently blank — it never overwrites a Status someone has already set
+by hand.
 
 ## Troubleshooting
 

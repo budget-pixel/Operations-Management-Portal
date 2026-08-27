@@ -98,7 +98,11 @@ window.BudgetApp.CapitalProjects = (function () {
     return getProjects();
   }
 
-  function submitUpdate(update) {
+  // Shared by submitUpdate/createProject/deleteProject — posts `payload`
+  // (which must include requestType) to the Apps Script deployment and
+  // normalizes network/timeout/server-error failures into a message
+  // that's safe to show the user directly.
+  function postRequest(payload, timeoutMessage) {
     if (!isConfigured()) {
       return Promise.reject(new Error(
         'The Capital Improvement Plan endpoint is not configured yet. See docs/google-sheets-integration.md §10.'
@@ -114,32 +118,26 @@ window.BudgetApp.CapitalProjects = (function () {
 
     return fetch(CIP_API_URL, {
       method: 'POST',
-      body: JSON.stringify({
-        requestType: 'capitalProjectUpdate',
-        projectName: update.projectName,
-        phase: update.phase,
-        statusNotes: update.statusNotes,
-        updatedBy: update.updatedBy || '',
-      }),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     })
       .then(function (response) {
         clearTimeout(timeoutId);
         if (!response.ok) {
-          throw new Error('Update request failed (HTTP ' + response.status + ').');
+          throw new Error('Request failed (HTTP ' + response.status + ').');
         }
         return response.json();
       })
       .then(function (result) {
         if (!result || !result.success) {
-          throw new Error((result && result.error) || 'Update failed. Please try again.');
+          throw new Error((result && result.error) || 'Request failed. Please try again.');
         }
         return result;
       })
       .catch(function (err) {
         clearTimeout(timeoutId);
         if (timedOut || (err && err.name === 'AbortError')) {
-          throw new Error('The update is taking longer than expected and may not have completed.');
+          throw new Error(timeoutMessage);
         }
         if (err instanceof TypeError) {
           throw new Error('Could not reach the update service. Check your connection and try again.');
@@ -148,10 +146,43 @@ window.BudgetApp.CapitalProjects = (function () {
       });
   }
 
+  function submitUpdate(update) {
+    // Forwards exactly the field(s) the caller passed — a deliberate
+    // partial update (see saveProject() in js/capitalProjectDetail.js and
+    // handleCapitalProjectUpdate in docs/apps-script/CapitalProjectsCode.gs
+    // for why: sending unchanged fields back on every save previously
+    // caused a race that could overwrite a just-saved value with a stale
+    // one).
+    return postRequest(
+      Object.assign({}, update, { requestType: 'capitalProjectUpdate', updatedBy: update.updatedBy || '' }),
+      'The update is taking longer than expected and may not have completed.'
+    );
+  }
+
+  // Creates a brand-new project row. `fields` may include projectName
+  // (required), dept, fund, phase, updatedBy — see
+  // handleCapitalProjectCreate in CapitalProjectsCode.gs.
+  function createProject(fields) {
+    return postRequest(
+      Object.assign({}, fields, { requestType: 'capitalProjectCreate', updatedBy: fields.updatedBy || '' }),
+      'The request is taking longer than expected and the project may not have been created.'
+    );
+  }
+
+  // Permanently deletes a project row by exact name.
+  function deleteProject(projectName) {
+    return postRequest(
+      { requestType: 'capitalProjectDelete', projectName: projectName },
+      'The request is taking longer than expected and the project may not have been deleted.'
+    );
+  }
+
   return {
     getProjects: getProjects,
     refresh: refresh,
     submitUpdate: submitUpdate,
+    createProject: createProject,
+    deleteProject: deleteProject,
     isConfigured: isConfigured,
   };
 })();

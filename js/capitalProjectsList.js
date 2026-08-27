@@ -1,11 +1,18 @@
 /* =============================================================
    capitalProjectsList.js
    Drives capital-projects.html: loads the Capital Improvement Plan
-   ledger, renders it as a table with Fund/Phase/Dept filters, and
-   lets anyone update a project's Project Phase inline (saves on
-   change) and Status Notes (saves on blur) — same "no roles yet"
-   v1 scope as Work Orders' list page. Every other column (budget
-   figures, narrative, funding source, etc.) is read-only here.
+   ledger — both the live FY2027-2031 projects and the FY2022-2026
+   historical record, unified in the same sheet/tab — and renders a
+   simple, browsable list — Project Name (links to
+   capital-project.html for full detail and editing), Fund, Phase,
+   Status, Total Budget (sum of all ten FY2022-FY2031 amounts — Dept
+   is filterable but not shown as a column) — filterable by a
+   project-name search box, Fund/Phase/Dept/Status dropdowns, and a
+   funded-year pill row (All/Past CIP/FY2027..FY2031 — "Past CIP"
+   groups FY2022-FY2026), styled like the year tabs on budgetv2's
+   public CIP pages rather than a dropdown. All other fields and
+   every edit control live on the project detail page
+   (js/capitalProjectDetail.js), not here.
 
    Depends on: window.BudgetApp.CapitalProjects, window.BudgetApp.Calculations
    ============================================================= */
@@ -13,15 +20,42 @@
 (function (CapitalProjects, Calculations) {
   'use strict';
 
-  var PHASE_OPTIONS = [
-    'Identification', 'Design', 'Bidding', 'Construction', 'On Hold', 'Complete', 'Cancelled', 'None',
-  ];
-
   var apiStatusBanner = document.getElementById('apiStatusBanner');
+  var searchInput = document.getElementById('searchInput');
   var fundFilter = document.getElementById('fundFilter');
   var phaseFilter = document.getElementById('phaseFilter');
   var deptFilter = document.getElementById('deptFilter');
+  var statusFilter = document.getElementById('statusFilter');
+  var yearFilterPills = document.getElementById('yearFilterPills');
+  var refreshBtn = document.getElementById('refreshProjectsBtn');
   var tbody = document.getElementById('capitalProjectsBody');
+
+  // Tracks the active year pill's data-year value (All/past/fy2027..fy2031)
+  // — the pill row replaces what used to be a <select id="yearFilter">.
+  var selectedYear = 'All';
+
+  // FY2022-FY2026 — the fiscal years the "Past CIP" grouped year-filter
+  // option matches against (any one of them funded is a match).
+  var PAST_CIP_FY_FIELDS = ['fy2022', 'fy2023', 'fy2024', 'fy2025', 'fy2026'];
+
+  // All ten fiscal years — summed for the Total Budget column, since a
+  // project only ever has amounts in one era (historical FY2022-2026 OR
+  // live proposed FY2027-2031), not both.
+  var ALL_FY_FIELDS = PAST_CIP_FY_FIELDS.concat(['fy2027', 'fy2028', 'fy2029', 'fy2030', 'fy2031']);
+
+  function totalBudget(project) {
+    return ALL_FY_FIELDS.reduce(function (sum, field) { return sum + (project[field] || 0); }, 0);
+  }
+
+  // Fixed, not derived from the loaded data — matches the dropdown
+  // capital-project.html's detail page offers (see STATUS_OPTIONS in
+  // js/capitalProjectDetail.js). Deriving this from project.status values
+  // actually present would leave the filter with nothing but "All" until
+  // someone has manually set a Status on at least one project, since the
+  // sheet's Status column starts out blank for every live FY2027-2031
+  // project (only the historical import fills it in, and only for rows
+  // it adds).
+  var STATUS_OPTIONS = ['Programmed', 'In Progress', 'Complete', 'Cancelled', 'None'];
 
   var allProjects = [];
 
@@ -41,108 +75,13 @@
     return td;
   }
 
-  function currencyCell(amount) {
-    var td = document.createElement('td');
-    td.textContent = Calculations.formatCurrency(amount || 0);
-    return td;
-  }
-
-  function formatDate(value) {
-    if (!value) return '';
-    var date = new Date(value);
-    if (isNaN(date.getTime())) return String(value);
-    return date.toLocaleDateString();
-  }
-
-  function buildPhaseCell(project) {
-    var td = document.createElement('td');
-    var select = document.createElement('select');
-
-    PHASE_OPTIONS.forEach(function (phase) {
-      var option = document.createElement('option');
-      option.value = phase;
-      option.textContent = phase;
-      option.selected = phase === project.phase;
-      select.appendChild(option);
-    });
-    // The sheet may already contain a phase value outside the standard
-    // list (typo, blank, or one set before this page existed) — keep it
-    // selectable rather than silently swapping it for the first option.
-    if (project.phase && PHASE_OPTIONS.indexOf(project.phase) === -1) {
-      var customOption = document.createElement('option');
-      customOption.value = project.phase;
-      customOption.textContent = project.phase;
-      customOption.selected = true;
-      select.insertBefore(customOption, select.firstChild);
-    }
-
-    var savedNote = document.createElement('span');
-    savedNote.className = 'field-hint';
-    savedNote.style.display = 'block';
-
-    select.addEventListener('change', function () {
-      savedNote.textContent = 'Saving...';
-      CapitalProjects.submitUpdate({
-        projectName: project.projectName,
-        phase: select.value,
-        statusNotes: project.statusNotes,
-      })
-        .then(function () {
-          project.phase = select.value;
-          savedNote.textContent = 'Saved.';
-        })
-        .catch(function (err) {
-          savedNote.textContent = err.message;
-          select.value = project.phase;
-        });
-    });
-
-    td.appendChild(select);
-    td.appendChild(savedNote);
-    return td;
-  }
-
-  function buildStatusNotesCell(project) {
-    var td = document.createElement('td');
-    var textarea = document.createElement('textarea');
-    textarea.value = project.statusNotes || '';
-    textarea.rows = 2;
-    textarea.style.minWidth = '10rem';
-
-    var savedNote = document.createElement('span');
-    savedNote.className = 'field-hint';
-    savedNote.style.display = 'block';
-
-    textarea.addEventListener('blur', function () {
-      if (textarea.value === project.statusNotes) return;
-      savedNote.textContent = 'Saving...';
-      CapitalProjects.submitUpdate({
-        projectName: project.projectName,
-        phase: project.phase,
-        statusNotes: textarea.value,
-      })
-        .then(function () {
-          project.statusNotes = textarea.value;
-          savedNote.textContent = 'Saved.';
-        })
-        .catch(function (err) {
-          savedNote.textContent = err.message;
-          textarea.value = project.statusNotes;
-        });
-    });
-
-    td.appendChild(textarea);
-    td.appendChild(savedNote);
-    return td;
-  }
-
   function renderRows(projects) {
     tbody.innerHTML = '';
 
     if (projects.length === 0) {
       var emptyRow = document.createElement('tr');
       var emptyCell = document.createElement('td');
-      emptyCell.colSpan = 13;
+      emptyCell.colSpan = 5;
       emptyCell.textContent = 'No capital projects found.';
       emptyRow.appendChild(emptyCell);
       tbody.appendChild(emptyRow);
@@ -151,27 +90,35 @@
 
     projects.forEach(function (project) {
       var row = document.createElement('tr');
-      row.appendChild(cell(project.projectName));
-      row.appendChild(cell(project.dept));
+
+      var nameCell = document.createElement('td');
+      var link = document.createElement('a');
+      link.className = 'cip-project-link';
+      link.href = 'capital-project.html?name=' + encodeURIComponent(project.projectName);
+      link.textContent = project.projectName;
+      nameCell.appendChild(link);
+      row.appendChild(nameCell);
+
       row.appendChild(cell(project.fund));
-      row.appendChild(cell(project.priority));
-      row.appendChild(currencyCell(project.fy2027));
-      row.appendChild(currencyCell(project.fy2028));
-      row.appendChild(currencyCell(project.fy2029));
-      row.appendChild(currencyCell(project.fy2030));
-      row.appendChild(currencyCell(project.fy2031));
-      row.appendChild(currencyCell(project.totalFy2027to2031));
-      row.appendChild(buildPhaseCell(project));
-      row.appendChild(buildStatusNotesCell(project));
-      row.appendChild(cell(formatDate(project.lastUpdated)));
+      row.appendChild(cell(project.phase));
+      row.appendChild(cell(project.status));
+      row.appendChild(cell(Calculations.formatCurrency(totalBudget(project))));
       tbody.appendChild(row);
     });
   }
 
   function matchesFilters(project) {
+    var query = searchInput.value.trim().toLowerCase();
+    if (query && project.projectName.toLowerCase().indexOf(query) === -1) return false;
     if (fundFilter.value !== 'All' && project.fund !== fundFilter.value) return false;
     if (phaseFilter.value !== 'All' && project.phase !== phaseFilter.value) return false;
     if (deptFilter.value !== 'All' && project.dept !== deptFilter.value) return false;
+    if (statusFilter.value !== 'All' && project.status !== statusFilter.value) return false;
+    if (selectedYear === 'past') {
+      if (!PAST_CIP_FY_FIELDS.some(function (field) { return project[field] > 0; })) return false;
+    } else if (selectedYear !== 'All' && !(project[selectedYear] > 0)) {
+      return false;
+    }
     return true;
   }
 
@@ -191,6 +138,15 @@
     return result;
   }
 
+  // Clears every <option> except the first ("All") — needed because
+  // loadProjects() can now run more than once (Refresh Data), and
+  // populateFilter() only appends.
+  function resetFilterOptions(select) {
+    while (select.options.length > 1) {
+      select.remove(1);
+    }
+  }
+
   function populateFilter(select, options) {
     options.forEach(function (option) {
       var optionEl = document.createElement('option');
@@ -200,15 +156,29 @@
     });
   }
 
-  function loadProjects() {
-    tbody.innerHTML = '<tr><td colspan="13">Loading capital projects...</td></tr>';
-    CapitalProjects.getProjects()
+  function loadProjects(forceRefresh) {
+    tbody.innerHTML = '<tr><td colspan="5">Loading capital projects...</td></tr>';
+    var request = forceRefresh ? CapitalProjects.refresh() : CapitalProjects.getProjects();
+    request
       .then(function (projects) {
         hideApiError();
         allProjects = projects;
+
+        resetFilterOptions(fundFilter);
+        resetFilterOptions(phaseFilter);
+        resetFilterOptions(deptFilter);
+        resetFilterOptions(statusFilter);
+
         populateFilter(fundFilter, uniqueSorted(projects.map(function (p) { return p.fund; })));
         populateFilter(phaseFilter, uniqueSorted(projects.map(function (p) { return p.phase; })));
         populateFilter(deptFilter, uniqueSorted(projects.map(function (p) { return p.dept; })));
+        // Fixed options first, then any other status value actually found
+        // in the data that isn't already one of them (e.g. a typo, or one
+        // set before this list existed) — so nothing is ever unreachable
+        // through this filter.
+        var extraStatuses = uniqueSorted(projects.map(function (p) { return p.status; }))
+          .filter(function (status) { return STATUS_OPTIONS.indexOf(status) === -1; });
+        populateFilter(statusFilter, STATUS_OPTIONS.concat(extraStatuses));
         if (projects.length === 0) {
           showApiError(
             'No capital projects found. Check that the "Capital Improvement Plan" tab exists in the '
@@ -225,9 +195,22 @@
 
   function init() {
     loadProjects();
-    [fundFilter, phaseFilter, deptFilter].forEach(function (select) {
+    searchInput.addEventListener('input', applyFilters);
+    [fundFilter, phaseFilter, deptFilter, statusFilter].forEach(function (select) {
       select.addEventListener('change', applyFilters);
     });
+
+    yearFilterPills.querySelectorAll('.cip-year-pill').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        selectedYear = pill.dataset.year;
+        yearFilterPills.querySelectorAll('.cip-year-pill').forEach(function (other) {
+          other.classList.toggle('is-active', other === pill);
+        });
+        applyFilters();
+      });
+    });
+
+    refreshBtn.addEventListener('click', function () { loadProjects(true); });
   }
 
   init();

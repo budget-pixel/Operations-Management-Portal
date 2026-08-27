@@ -32,9 +32,13 @@ window.BudgetApp.Sections = (function () {
       },
       {
         title: 'Project Management',
-        description: 'Track capital and operating projects from initiation through closeout.',
-        href: 'project-management.html',
-        buttonLabel: 'Open Project Management',
+        description: 'Track capital project budgets, phases, and status across the Capital Improvement Plan.',
+        // Goes straight to capital-projects.html — Project Management
+        // has exactly one thing in it (Capital Improvement Projects) and
+        // isn't expected to grow, so the landing page in between is
+        // just an extra click.
+        href: 'capital-projects.html',
+        buttonLabel: 'Open Capital Projects',
       },
       {
         title: 'Asset Tracking',

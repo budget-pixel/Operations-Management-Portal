@@ -22,7 +22,12 @@ window.BudgetApp.Nav = (function () {
   var LINKS = [
     { page: 'budget-management', href: 'budget-management.html', label: 'Budget' },
     { page: 'grant-management', href: 'grant-management.html', label: 'Grant' },
-    { page: 'project-management', href: 'project-management.html', label: 'Project' },
+    // Project Management has exactly one thing in it (Capital Improvement
+    // Projects) and isn't expected to grow, so the nav link skips its
+    // landing page and goes straight there — 'page' still matches
+    // project-management.html/capital-projects.html/capital-project.html's
+    // data-page="project-management" for the active-link highlight.
+    { page: 'project-management', href: 'capital-projects.html', label: 'Project' },
     { page: 'asset-tracking', href: 'asset-tracking.html', label: 'Asset Tracking' },
     { page: 'work-orders', href: 'work-orders.html', label: 'Work Orders' },
     { page: 'reports-analytics', href: 'reports-analytics.html', label: 'Reports & Analytics' },
