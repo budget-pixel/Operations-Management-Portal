@@ -100,6 +100,17 @@
     return note;
   }
 
+  function departmentOptions(projects) {
+    var seen = {};
+    return projects.map(function (project) { return String(project.dept || '').trim(); })
+      .filter(function (dept) {
+        if (!dept || seen[dept]) return false;
+        seen[dept] = true;
+        return true;
+      })
+      .sort(function (a, b) { return a.localeCompare(b); });
+  }
+
   // Saves ONLY the field(s) in `overrides` — a deliberate partial update,
   // not a full-snapshot resend of every editable field. The backend
   // (handleCapitalProjectUpdate) only writes columns whose key is present
@@ -110,14 +121,18 @@
   // included in that snapshot would overwrite newer values already on the
   // sheet with stale ones. Only ever sending what actually changed makes
   // that impossible.
-  function saveProject(project, overrides, savedNote, onError) {
+  function saveProject(project, overrides, savedNote, onError, onSuccess) {
     var payload = Object.assign({ projectName: project.projectName }, overrides);
 
     savedNote.textContent = 'Saving...';
     CapitalProjects.submitUpdate(payload)
       .then(function () {
         Object.keys(overrides).forEach(function (key) {
-          project[key] = overrides[key];
+          if (key === 'newProjectName') {
+            project.projectName = overrides[key];
+          } else {
+            project[key] = overrides[key];
+          }
         });
         savedNote.textContent = 'Saved.';
         // Invalidates the cached project list (see js/capitalProjects.js)
@@ -126,6 +141,7 @@
         // out-of-date session cache. Fire-and-forget — this page already
         // has what it needs in `project`.
         CapitalProjects.refresh().catch(function () {});
+        if (onSuccess) onSuccess();
       })
       .catch(function (err) {
         savedNote.textContent = err.message;
@@ -197,6 +213,48 @@
     });
 
     wrap.appendChild(input);
+    wrap.appendChild(savedNote);
+    return wrap;
+  }
+
+  function buildProjectNameControl(project) {
+    var wrap = el('div', 'cip-project-name-control');
+    wrap.style.display = 'flex';
+    wrap.style.alignItems = 'center';
+    wrap.style.gap = '10px';
+    var renameBtn = document.createElement('button');
+    renameBtn.type = 'button';
+    renameBtn.className = 'btn btn-secondary';
+    renameBtn.textContent = 'Edit Name';
+
+    var savedNote = buildSavedNote();
+    savedNote.style.marginTop = '0';
+    function renameProject() {
+      var enteredName = window.prompt('Edit project name', project.projectName);
+      if (enteredName === null) return;
+      var newName = enteredName.trim();
+      if (newName === project.projectName) return;
+      if (!newName) {
+        savedNote.textContent = 'Project name is required.';
+        return;
+      }
+      renameBtn.disabled = true;
+      saveProject(
+        project,
+        { newProjectName: newName },
+        savedNote,
+        function () {
+          renameBtn.disabled = false;
+        },
+        function () {
+          window.location.href = 'capital-project.html?name=' + encodeURIComponent(newName);
+        }
+      );
+    }
+
+    renameBtn.addEventListener('click', renameProject);
+
+    wrap.appendChild(renameBtn);
     wrap.appendChild(savedNote);
     return wrap;
   }
@@ -409,10 +467,10 @@
     budgetPanel.appendChild(el('h2', null, 'Budget & Funding Summary'));
     var highlight = el('div', 'cip-detail-budget-highlight');
     highlight.appendChild(el('span', null, isProjectComplete(project) ? 'Actual Cost' : 'Project Budget'));
-    highlight.appendChild(el('strong', null, Calculations.formatCurrency(allFyTotal(project))));
+    highlight.appendChild(el('strong', null, Calculations.formatWholeDollarCurrency(allFyTotal(project))));
     budgetPanel.appendChild(highlight);
     var fundingItem = el('div', 'cip-detail-list-item');
-    fundingItem.appendChild(el('span', null, 'Funding Source'));
+    fundingItem.appendChild(el('span', null, 'Fund'));
     fundingItem.appendChild(el('strong', null, project.fund || '—'));
     budgetPanel.appendChild(fundingItem);
 
@@ -424,7 +482,7 @@
       fundedYears.forEach(function (field) {
         var row = el('div', 'cip-detail-year-row');
         row.appendChild(el('span', null, FY_LABELS[field]));
-        row.appendChild(el('strong', null, Calculations.formatCurrency(project[field])));
+        row.appendChild(el('strong', null, Calculations.formatWholeDollarCurrency(project[field])));
         row.style.marginBottom = '8px';
         budgetPanel.appendChild(row);
       });
@@ -489,7 +547,7 @@
     });
   }
 
-  function renderProject(project) {
+  function renderProject(project, deptOptions) {
     document.title = project.projectName + ' — Capital Project Detail';
 
     viewToggle.hidden = false;
@@ -502,10 +560,17 @@
 
     var titleRow = el('div', 'cip-detail-hero-top');
     titleRow.appendChild(el('h1', 'cip-detail-title', project.projectName));
+    var titleControls = el('div', 'cip-detail-title-controls');
+    titleControls.style.display = 'flex';
+    titleControls.style.alignItems = 'center';
+    titleControls.style.gap = '10px';
+    titleControls.style.flexWrap = 'wrap';
+    titleControls.appendChild(buildProjectNameControl(project));
     var statusLabel = project.status || project.phase;
     if (statusLabel) {
-      titleRow.appendChild(el('span', 'cip-public-badge ' + phaseBadgeClass(statusLabel), statusLabel));
+      titleControls.appendChild(el('span', 'cip-public-badge ' + phaseBadgeClass(statusLabel), statusLabel));
     }
+    titleRow.appendChild(titleControls);
     hero.appendChild(titleRow);
 
     var kicker = el('div', 'cip-detail-kicker');
@@ -539,7 +604,6 @@
     detailsPanel.appendChild(buildTextField(project, 'projectManager', 'Project Manager'));
     detailsPanel.appendChild(buildSelectField(project, 'commissionerDistrict', 'Commissioner District', DISTRICT_OPTIONS));
     detailsPanel.appendChild(buildTextField(project, 'locationName', 'Location'));
-    detailsPanel.appendChild(buildTextField(project, 'fundingSource', 'Funding Source'));
     detailsPanel.appendChild(buildMonthYearField(project, 'startDate', 'Start Date'));
     detailsPanel.appendChild(buildMonthYearField(project, 'estCompletionDate', 'Estimated Completion Date'));
     detailsPanel.appendChild(buildTextField(project, 'inHouseEngineering', 'In-House Engineering'));
@@ -554,7 +618,7 @@
     budgetPanel.appendChild(el('h2', null, 'Budget — FY2027–FY2031 (Proposed)'));
     var highlight = el('div', 'cip-detail-budget-highlight');
     highlight.appendChild(el('span', null, 'Total FY2027–FY2031'));
-    highlight.appendChild(el('strong', null, Calculations.formatCurrency(project.totalFy2027to2031 || 0)));
+    highlight.appendChild(el('strong', null, Calculations.formatWholeDollarCurrency(project.totalFy2027to2031 || 0)));
     budgetPanel.appendChild(highlight);
     // Prior-year (FY2022-2026) funding as a single editable summary line
     // rather than its own panel with five separate rows — edits go to
@@ -577,7 +641,7 @@
     statusPanel.appendChild(el('h2', null, 'Status'));
     statusPanel.appendChild(buildSelectField(project, 'phase', 'Project Phase', PHASE_OPTIONS));
     statusPanel.appendChild(buildSelectField(project, 'status', 'Status', STATUS_OPTIONS));
-    statusPanel.appendChild(buildTextField(project, 'dept', 'Dept'));
+    statusPanel.appendChild(buildSelectField(project, 'dept', 'Dept', deptOptions));
     statusPanel.appendChild(buildSelectField(project, 'fund', 'Fund', FUND_OPTIONS));
     statusPanel.appendChild(buildSelectField(project, 'priority', 'Priority', PRIORITY_OPTIONS));
     statusPanel.appendChild(buildTextareaField(project, 'statusNotes', 'Status Notes', 4));
@@ -633,7 +697,7 @@
     return panel;
   }
 
-  function renderNewProjectForm() {
+  function renderNewProjectForm(deptOptions) {
     document.title = 'New Capital Project';
 
     var hero = el('div', 'cip-detail-hero');
@@ -654,9 +718,18 @@
 
     var deptField = el('div', 'cip-detail-field');
     deptField.appendChild(el('label', null, 'Dept'));
-    var deptInput = document.createElement('input');
-    deptInput.type = 'text';
-    deptField.appendChild(deptInput);
+    var deptSelect = document.createElement('select');
+    var deptPlaceholder = document.createElement('option');
+    deptPlaceholder.value = '';
+    deptPlaceholder.textContent = '— None —';
+    deptSelect.appendChild(deptPlaceholder);
+    deptOptions.forEach(function (option) {
+      var optionEl = document.createElement('option');
+      optionEl.value = option;
+      optionEl.textContent = option;
+      deptSelect.appendChild(optionEl);
+    });
+    deptField.appendChild(deptSelect);
     panel.appendChild(deptField);
 
     var fundField = el('div', 'cip-detail-field');
@@ -701,7 +774,7 @@
       savedNote.textContent = 'Creating...';
       CapitalProjects.createProject({
         projectName: projectName,
-        dept: deptInput.value.trim(),
+        dept: deptSelect.value,
         fund: fundSelect.value,
         phase: phaseSelect.value,
       })
@@ -721,20 +794,20 @@
   }
 
   function init() {
-    if (isNewProjectMode()) {
-      renderNewProjectForm();
-      return;
-    }
-
     var projectName = getProjectNameFromQuery();
     CapitalProjects.getProjects()
       .then(function (projects) {
+        var deptOptions = departmentOptions(projects);
+        if (isNewProjectMode()) {
+          renderNewProjectForm(deptOptions);
+          return;
+        }
         var project = projects.filter(function (p) { return p.projectName === projectName; })[0];
         if (!project) {
           renderNotFound(projectName);
           return;
         }
-        renderProject(project);
+        renderProject(project, deptOptions);
       })
       .catch(function (err) {
         showApiError(err.message);

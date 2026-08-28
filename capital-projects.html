@@ -70,6 +70,16 @@
     #capitalProjectsBody tr:last-child td {
       border-bottom: none;
     }
+    #capitalProjectsBody .cip-grant-subtotal td,
+    #capitalProjectsBody .cip-project-subtotal td {
+      background: var(--color-green-bg);
+      border-top: 2px solid var(--color-green);
+      font-weight: 800;
+    }
+    #capitalProjectsBody .cip-grant-subtotal td:last-child,
+    #capitalProjectsBody .cip-project-subtotal td:last-child {
+      text-align: right;
+    }
     .transfer-table thead tr th {
       border-bottom: 1px solid var(--color-line);
       padding-bottom: 0.6rem;
@@ -174,15 +184,17 @@
           <table class="transfer-table">
             <thead>
               <tr>
+                <th>Project Number</th>
                 <th>Project Name</th>
                 <th>Fund</th>
                 <th>Phase</th>
+                <th>Completed / Est. Start</th>
                 <th>Status</th>
-                <th>Total Budget</th>
+                <th>Budget / Actual</th>
               </tr>
             </thead>
             <tbody id="capitalProjectsBody">
-              <tr><td colspan="5">Loading capital projects...</td></tr>
+              <tr><td colspan="7">Loading capital projects...</td></tr>
             </tbody>
           </table>
         </div>

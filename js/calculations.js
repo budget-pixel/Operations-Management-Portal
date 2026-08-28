@@ -15,6 +15,12 @@ window.BudgetApp.Calculations = (function () {
     style: 'currency',
     currency: 'USD',
   });
+  var wholeDollarCurrencyFormatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 
   // Upper bound for any dollar amount entered anywhere in the app (Transfer
   // rows, Rollforward lines) — shared here so both forms enforce the same
@@ -40,6 +46,10 @@ window.BudgetApp.Calculations = (function () {
     return currencyFormatter.format(amount);
   }
 
+  function formatWholeDollarCurrency(amount) {
+    return wholeDollarCurrencyFormatter.format(amount);
+  }
+
   function sumAmounts(values) {
     return values.reduce(function (sum, value) {
       return sum + parseAmount(value);
@@ -50,6 +60,7 @@ window.BudgetApp.Calculations = (function () {
     parseAmount: parseAmount,
     isValidAmount: isValidAmount,
     formatCurrency: formatCurrency,
+    formatWholeDollarCurrency: formatWholeDollarCurrency,
     sumAmounts: sumAmounts,
     MAX_AMOUNT: MAX_AMOUNT,
   };

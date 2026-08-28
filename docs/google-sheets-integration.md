@@ -288,10 +288,10 @@ and more) — plus, after §10's setup below, five more FY columns
 (`FY2022 Proposed`…`FY2026 Proposed`) and a `Status` column so the
 county's FY2022-2026 historical project record lives in this same
 tab/sheet as the live FY2027-2031 projects, not a separate one. Nearly
-every field is editable from `capital-project.html`: Project Phase,
+every field is editable from `capital-project.html`: Project Name, Project Phase,
 Status, Dept, Priority, Project Narrative, Operational Impact, Pertinent
 Information, Strategic Goals, Project Code, Project Manager, Commissioner
-District, Location, Funding Source, Start Date, Estimated Completion
+District, Location, Start Date, Estimated Completion
 Date, In-House Engineering, all ten FY Proposed amounts, and Status
 Notes. Only Fund, Budget Org Code, and Budget Account Code/Name stay
 read-only-via-the-page (edit those directly in the sheet).
@@ -338,7 +338,10 @@ in the connected workbook, `doGet` returns `{ error: ... }` and
 **Capital Improvement Plan** — the tab must already have this header row
 (exact text, county's existing budget-book columns):
 
-`Budget Project Name(s) | Dept | Budget Project Code(s) | Commissioner District | Estimated Completion Date | Budget Fund(s) | Funding Source | Location Name | Operational Impact | Pertinent Information | Project Manager | Project Narrative | Project Phase | Project Priority | Start Date | Strategic Goals | Budget Org Code(s) | Budget Account Code(s) | Budget Account Name(s) | In-House Engineering | FY2027 Proposed | FY2028 Proposed | FY2029 Proposed | FY2030 Proposed | FY2031 Proposed | Total FY2027-FY2031`
+`Budget Project Name(s) | Dept | Budget Project Code(s) | Commissioner District | Estimated Completion Date | Budget Fund(s) | Location Name | Operational Impact | Pertinent Information | Project Manager | Project Narrative | Project Phase | Project Priority | Start Date | Strategic Goals | Budget Org Code(s) | Budget Account Code(s) | Budget Account Name(s) | In-House Engineering | FY2027 Proposed | FY2028 Proposed | FY2029 Proposed | FY2030 Proposed | FY2031 Proposed | Total FY2027-FY2031`
+
+If this tab still has the former `Funding Source` column, delete that
+entire column; the portal no longer reads or writes it.
 
 Add **nine new trailing columns** — appended at the end so the existing
 budget-book columns and any other tool reading this sheet are unaffected:

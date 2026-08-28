@@ -3,9 +3,9 @@
    Drives capital-projects.html: loads the Capital Improvement Plan
    ledger — both the live FY2027-2031 projects and the FY2022-2026
    historical record, unified in the same sheet/tab — and renders a
-   simple, browsable list — Project Name (links to
+   simple, browsable list — Project Number, Project Name (links to
    capital-project.html for full detail and editing), Fund, Phase,
-   Status, Total Budget (sum of all ten FY2022-FY2031 amounts — Dept
+   Completed / Est. Start, Status, Budget / Actual (sum of all ten FY2022-FY2031 amounts — Dept
    is filterable but not shown as a column) — filterable by a
    project-name search box, Fund/Phase/Dept/Status dropdowns, and a
    funded-year pill row (All/Past CIP/FY2027..FY2031 — "Past CIP"
@@ -37,14 +37,65 @@
   // FY2022-FY2026 — the fiscal years the "Past CIP" grouped year-filter
   // option matches against (any one of them funded is a match).
   var PAST_CIP_FY_FIELDS = ['fy2022', 'fy2023', 'fy2024', 'fy2025', 'fy2026'];
+  var FUTURE_CIP_FY_FIELDS = ['fy2027', 'fy2028', 'fy2029', 'fy2030', 'fy2031'];
 
-  // All ten fiscal years — summed for the Total Budget column, since a
+  // All ten fiscal years — summed for the Budget / Actual column, since a
   // project only ever has amounts in one era (historical FY2022-2026 OR
   // live proposed FY2027-2031), not both.
-  var ALL_FY_FIELDS = PAST_CIP_FY_FIELDS.concat(['fy2027', 'fy2028', 'fy2029', 'fy2030', 'fy2031']);
+  var ALL_FY_FIELDS = PAST_CIP_FY_FIELDS.concat(FUTURE_CIP_FY_FIELDS);
+  var MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
 
   function totalBudget(project) {
     return ALL_FY_FIELDS.reduce(function (sum, field) { return sum + (project[field] || 0); }, 0);
+  }
+
+  function formatMonthYear(value) {
+    var trimmed = String(value || '').trim();
+    if (!trimmed) return '';
+
+    var mmYyyy = /^(\d{1,2})\/(\d{4})$/.exec(trimmed);
+    if (mmYyyy) {
+      var monthIndex = parseInt(mmYyyy[1], 10) - 1;
+      if (monthIndex >= 0 && monthIndex <= 11) return MONTH_NAMES[monthIndex] + ' ' + mmYyyy[2];
+    }
+
+    var yyyyMm = /^(\d{4})-(\d{1,2})$/.exec(trimmed);
+    if (yyyyMm) {
+      var yearMonthIndex = parseInt(yyyyMm[2], 10) - 1;
+      if (yearMonthIndex >= 0 && yearMonthIndex <= 11) {
+        return MONTH_NAMES[yearMonthIndex] + ' ' + yyyyMm[1];
+      }
+    }
+
+    if (/\d/.test(trimmed)) {
+      var date = new Date(trimmed);
+      if (!isNaN(date.getTime())) {
+        return MONTH_NAMES[date.getUTCMonth()] + ' ' + date.getUTCFullYear();
+      }
+    }
+
+    return trimmed;
+  }
+
+  function isGrantFundedProject(project) {
+    return /grant funded/i.test(project.fund || '')
+      || /^grant\b/i.test(project.projectName || '')
+      || /grant funded/i.test(project.statusNotes || '');
+  }
+
+  function isCompletedProject(project) {
+    return /^(complete|completed)$/i.test(String(project.status || '').trim());
+  }
+
+  function hasStatus(project, status) {
+    return String(project.status || '').trim().toLowerCase() === status;
+  }
+
+  function isActiveGrantFundedProject(project) {
+    return isGrantFundedProject(project) && !isCompletedProject(project);
   }
 
   // Fixed, not derived from the loaded data — matches the dropdown
@@ -118,21 +169,42 @@
     return td;
   }
 
-  function renderRows(projects) {
+  function renderRows(projects, showPastSubtotals) {
     tbody.innerHTML = '';
 
     if (projects.length === 0) {
       var emptyRow = document.createElement('tr');
       var emptyCell = document.createElement('td');
-      emptyCell.colSpan = 5;
+      emptyCell.colSpan = 7;
       emptyCell.textContent = 'No capital projects found.';
       emptyRow.appendChild(emptyCell);
       tbody.appendChild(emptyRow);
       return;
     }
 
-    projects.forEach(function (project) {
+    var grantSubtotal = projects.filter(isActiveGrantFundedProject).reduce(function (sum, project) {
+      return sum + totalBudget(project);
+    }, 0);
+    var completedSubtotal = projects.filter(function (project) {
+      return isCompletedProject(project);
+    }).reduce(function (sum, project) {
+      return sum + totalBudget(project);
+    }, 0);
+    var inProgressSubtotal = projects.filter(function (project) {
+      return !isGrantFundedProject(project) && hasStatus(project, 'in progress');
+    }).reduce(function (sum, project) {
+      return sum + totalBudget(project);
+    }, 0);
+    var programmedSubtotal = projects.filter(function (project) {
+      return !isGrantFundedProject(project) && hasStatus(project, 'programmed');
+    }).reduce(function (sum, project) {
+      return sum + totalBudget(project);
+    }, 0);
+
+    projects.forEach(function (project, index) {
       var row = document.createElement('tr');
+
+      row.appendChild(cell(project.projectCode));
 
       var nameCell = document.createElement('td');
       var link = document.createElement('a');
@@ -144,10 +216,62 @@
 
       row.appendChild(cell(project.fund));
       row.appendChild(cell(project.phase));
+      var scheduleDate = isCompletedProject(project)
+        ? project.estCompletionDate
+        : (project.startDate || project.estCompletionDate);
+      row.appendChild(cell(formatMonthYear(scheduleDate)));
       row.appendChild(cell(project.status));
-      row.appendChild(cell(Calculations.formatCurrency(totalBudget(project))));
+      var projectTotal = totalBudget(project);
+      var budgetDisplay = selectedYear === 'past' && project.isHistorical && projectTotal === 0
+        ? 'No amount recorded'
+        : Calculations.formatWholeDollarCurrency(projectTotal);
+      row.appendChild(cell(budgetDisplay));
       tbody.appendChild(row);
+
+      var nextProject = projects[index + 1];
+      if (showPastSubtotals && isActiveGrantFundedProject(project)
+          && (!nextProject || !isActiveGrantFundedProject(nextProject))) {
+        var subtotalRow = document.createElement('tr');
+        subtotalRow.className = 'cip-grant-subtotal';
+        var subtotalLabel = document.createElement('td');
+        subtotalLabel.colSpan = 6;
+        subtotalLabel.textContent = 'Grant Funded Subtotal';
+        subtotalRow.appendChild(subtotalLabel);
+        subtotalRow.appendChild(cell(Calculations.formatWholeDollarCurrency(grantSubtotal)));
+        tbody.appendChild(subtotalRow);
+      }
+
+      var isInProgressNonGrant = !isGrantFundedProject(project) && hasStatus(project, 'in progress');
+      var nextIsInProgressNonGrant = nextProject
+        && !isGrantFundedProject(nextProject) && hasStatus(nextProject, 'in progress');
+      if (showPastSubtotals && isInProgressNonGrant && !nextIsInProgressNonGrant) {
+        appendProjectSubtotal('In Progress Projects Subtotal', inProgressSubtotal);
+      }
+
+      var isProgrammedNonGrant = !isGrantFundedProject(project) && hasStatus(project, 'programmed');
+      var nextIsProgrammedNonGrant = nextProject
+        && !isGrantFundedProject(nextProject) && hasStatus(nextProject, 'programmed');
+      if (showPastSubtotals && isProgrammedNonGrant && !nextIsProgrammedNonGrant) {
+        appendProjectSubtotal('Programmed Projects Subtotal', programmedSubtotal);
+      }
+
+      var isCompleted = isCompletedProject(project);
+      var nextIsCompleted = nextProject && isCompletedProject(nextProject);
+      if (showPastSubtotals && isCompleted && !nextIsCompleted) {
+        appendProjectSubtotal('Completed Projects Subtotal', completedSubtotal);
+      }
     });
+  }
+
+  function appendProjectSubtotal(label, amount) {
+    var subtotalRow = document.createElement('tr');
+    subtotalRow.className = 'cip-project-subtotal';
+    var subtotalLabel = document.createElement('td');
+    subtotalLabel.colSpan = 6;
+    subtotalLabel.textContent = label;
+    subtotalRow.appendChild(subtotalLabel);
+    subtotalRow.appendChild(cell(Calculations.formatWholeDollarCurrency(amount)));
+    tbody.appendChild(subtotalRow);
   }
 
   function matchesFilters(project) {
@@ -158,7 +282,10 @@
     if (deptFilter.value !== 'All' && project.dept !== deptFilter.value) return false;
     if (statusFilter.value !== 'All' && project.status !== statusFilter.value) return false;
     if (selectedYear === 'past') {
-      if (!PAST_CIP_FY_FIELDS.some(function (field) { return project[field] > 0; })) return false;
+      var hasHistoricalAmount = PAST_CIP_FY_FIELDS.some(function (field) { return project[field] > 0; });
+      var hasFutureAmount = FUTURE_CIP_FY_FIELDS.some(function (field) { return project[field] > 0; });
+      var isStatusOnlyHistoricalProject = project.isHistorical && !hasFutureAmount;
+      if (!hasHistoricalAmount && !isStatusOnlyHistoricalProject) return false;
     } else if (selectedYear !== 'All' && !(project[selectedYear] > 0)) {
       return false;
     }
@@ -166,7 +293,28 @@
   }
 
   function applyFilters() {
-    renderRows(allProjects.filter(matchesFilters));
+    var filteredProjects = allProjects.filter(matchesFilters);
+    if (selectedYear === 'past') {
+      filteredProjects = filteredProjects.map(function (project, index) {
+        return { project: project, index: index };
+      }).sort(function (a, b) {
+        var grantDifference = Number(isActiveGrantFundedProject(b.project))
+          - Number(isActiveGrantFundedProject(a.project));
+        if (grantDifference) return grantDifference;
+        var statusOrder = {
+          'in progress': 0,
+          'programmed': 1,
+          'complete': 3,
+          'completed': 3,
+        };
+        var aStatus = String(a.project.status || '').trim().toLowerCase();
+        var bStatus = String(b.project.status || '').trim().toLowerCase();
+        var aRank = statusOrder[aStatus] === undefined ? 2 : statusOrder[aStatus];
+        var bRank = statusOrder[bStatus] === undefined ? 2 : statusOrder[bStatus];
+        return aRank - bRank || a.index - b.index;
+      }).map(function (item) { return item.project; });
+    }
+    renderRows(filteredProjects, selectedYear === 'past');
   }
 
   function uniqueSorted(values) {
@@ -200,7 +348,7 @@
   }
 
   function loadProjects(forceRefresh) {
-    tbody.innerHTML = '<tr><td colspan="5">Loading capital projects...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7">Loading capital projects...</td></tr>';
     var savedState = readFilterState();
     var request = forceRefresh ? CapitalProjects.refresh() : CapitalProjects.getProjects();
     request

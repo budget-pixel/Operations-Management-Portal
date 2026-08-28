@@ -25,7 +25,7 @@
  *
  *   Budget Project Name(s) | Dept | Budget Project Code(s) |
  *   Commissioner District | Estimated Completion Date | Budget Fund(s) |
- *   Funding Source | Location Name | Operational Impact |
+ *   Location Name | Operational Impact |
  *   Pertinent Information | Project Manager | Project Narrative |
  *   Project Phase | Project Priority | Start Date | Strategic Goals |
  *   Budget Org Code(s) | Budget Account Code(s) | Budget Account Name(s) |
@@ -113,12 +113,12 @@ function numberCell(record, header) {
 function mapCapitalProjectRow(record) {
   return {
     projectName: cell(record, 'Budget Project Name(s)'),
+    isHistorical: isHistoricalCapitalProject(record),
     dept: cell(record, 'Dept'),
     projectCode: cell(record, 'Budget Project Code(s)'),
     commissionerDistrict: cell(record, 'Commissioner District'),
     estCompletionDate: cell(record, 'Estimated Completion Date'),
     fund: cell(record, 'Budget Fund(s)'),
-    fundingSource: cell(record, 'Funding Source'),
     locationName: cell(record, 'Location Name'),
     operationalImpact: cell(record, 'Operational Impact'),
     pertinentInformation: cell(record, 'Pertinent Information'),
@@ -148,6 +148,24 @@ function mapCapitalProjectRow(record) {
     lastUpdated: cell(record, 'Last Updated'),
     lastUpdatedBy: cell(record, 'Last Updated By'),
   };
+}
+
+// Identifies rows originating in the historical CIP source even when
+// every FY2022-FY2026 amount is blank/zero. Project number is preferred
+// because names can be edited in the management portal; name matching is
+// the fallback for historical records that have no project number.
+function isHistoricalCapitalProject(record) {
+  if (!record) {
+    Logger.log('isHistoricalCapitalProject is an internal helper; no standalone action is required.');
+    return false;
+  }
+  var projectNumber = cell(record, 'Budget Project Code(s)');
+  var projectName = cell(record, 'Budget Project Name(s)');
+  return HISTORICAL_CIP_PROJECTS.some(function (entry) {
+    var historicalNumber = String(entry.projectNumber || '').trim();
+    return (projectNumber && historicalNumber && projectNumber === historicalNumber)
+      || (!projectNumber && projectName === String(entry.name || '').trim());
+  });
 }
 
 function jsonResponse(obj) {
@@ -208,7 +226,7 @@ var CAPITAL_PROJECTS_WRITE_COLUMNS = [
   'FY2027 Proposed', 'FY2028 Proposed', 'FY2029 Proposed', 'FY2030 Proposed', 'FY2031 Proposed',
   'Status Notes', 'Last Updated', 'Last Updated By',
   'Budget Project Code(s)', 'Project Manager', 'Commissioner District', 'Location Name',
-  'Funding Source', 'Start Date', 'Estimated Completion Date', 'In-House Engineering',
+  'Start Date', 'Estimated Completion Date', 'In-House Engineering',
   'Project Narrative', 'Operational Impact', 'Pertinent Information', 'Strategic Goals',
 ];
 
@@ -243,7 +261,6 @@ var CAPITAL_PROJECTS_TEXT_FIELDS = {
   projectManager: ['Project Manager', 100],
   commissionerDistrict: ['Commissioner District', 60],
   locationName: ['Location Name', 200],
-  fundingSource: ['Funding Source', 200],
   startDate: ['Start Date', 60],
   estCompletionDate: ['Estimated Completion Date', 60],
   inHouseEngineering: ['In-House Engineering', 60],
@@ -274,8 +291,8 @@ var CAPITAL_PROJECTS_TEXT_FIELDS = {
  * copy simply isn't touched.
  *
  * Input: the spreadsheet, and { projectName, updatedBy, plus any subset
- * of: phase, dept, priority, fy2027..fy2031, statusNotes, projectCode,
- * projectManager, commissionerDistrict, locationName, fundingSource,
+ * of: newProjectName, phase, dept, priority, fy2027..fy2031, statusNotes, projectCode,
+ * projectManager, commissionerDistrict, locationName,
  * startDate, estCompletionDate, inHouseEngineering, projectNarrative }.
  * Output: { success: true, projectName } or { success: false, error }.
  */
@@ -289,6 +306,17 @@ function handleCapitalProjectUpdate(ss, requestData) {
   // requestData (checked with `!== undefined`, not truthiness — a blank
   // string or 0 is a legitimate value to write, not "field not sent").
   var updates = {};
+
+  if (requestData.newProjectName !== undefined) {
+    var newProjectName = String(requestData.newProjectName || '').trim();
+    if (!newProjectName) {
+      return { success: false, error: 'Project name is required.' };
+    }
+    if (!isValidLength(newProjectName, 200)) {
+      return { success: false, error: 'Project name is too long.' };
+    }
+    updates[CAPITAL_PROJECTS_KEY_COLUMN] = newProjectName;
+  }
 
   if (requestData.phase !== undefined) {
     var phase = String(requestData.phase || '').trim();
@@ -374,6 +402,15 @@ function handleCapitalProjectUpdate(ss, requestData) {
     return { success: false, error: 'No Capital Improvement Plan row found with project name "' + projectName + '".' };
   }
 
+  if (newProjectName && newProjectName !== projectName) {
+    for (var duplicateIndex = 1; duplicateIndex < values.length; duplicateIndex++) {
+      if (duplicateIndex !== rowIndex
+          && String(values[duplicateIndex][colIndex[CAPITAL_PROJECTS_KEY_COLUMN]]).trim() === newProjectName) {
+        return { success: false, error: 'A project named "' + newProjectName + '" already exists.' };
+      }
+    }
+  }
+
   var sheetRow = rowIndex + 1; // getRange is 1-indexed; values is 0-indexed.
   Object.keys(updates).forEach(function (header) {
     if (colIndex[header] !== -1) {
@@ -387,7 +424,7 @@ function handleCapitalProjectUpdate(ss, requestData) {
     sheet.getRange(sheetRow, colIndex['Last Updated By'] + 1).setValue(String(requestData.updatedBy || ''));
   }
 
-  return { success: true, projectName: projectName };
+  return { success: true, projectName: newProjectName || projectName };
 }
 
 /**
@@ -571,7 +608,7 @@ function handleCapitalProjectDelete(ss, requestData) {
 var HISTORICAL_CIP_PROJECTS = [
     { name: "13th Street Roadway & Drainage Improvements", projectNumber: "10312", completedDate: "10/2024", category: "Transportation & Public Works", fy2025: 0, fy2026: 304693, phase: "Design", status: "Complete", statusNote: "Design completed October 2024. The FY2026 capital work plan assigns $304,693." },
     { name: "Brown Road (Dirt to Pave)", projectNumber: "10537", estimatedStartDate: "TBD", category: "Transportation & Public Works", fy2025: 0, fy2026: 349500, phase: "Construction", status: "Programmed", statusNote: "The FY2026–30 work plan assigns $349,500 in Public Works capital funding. It does not appear on the current Public Works project table.", eng_color: "blue" },
-    { name: "CR 1087 Southbound Right Turn Lane", projectNumber: "10638", completedDate: "2025", category: "Transportation & Public Works", fy2025: 0, fy2026: 50000, phase: "Design", status: "Complete", statusNote: "Design completed FY2025; construction not yet complete. Per County Engineering project notes (FY25, “CR 1087 & US HWY 90 Intersection SB RT Turnlane”): Design phase, In-House Design/Permitting." },
+    { name: "CR 1087 Southbound Right Turn Lane", projectNumber: "10638", category: "Transportation & Public Works", fy2025: 0, fy2026: 50000, phase: "Construction", status: "In Progress", statusNote: "Design completed FY2025; construction is not yet complete. Per County Engineering project notes (FY25, “CR 1087 & US HWY 90 Intersection SB RT Turnlane”): In-House Design/Permitting." },
     { name: "CR 83 S Pedestrian Path Extension", projectNumber: "10475", estimatedStartDate: "TBD", category: "Transportation & Public Works", fy2025: 125000, fy2026: 0, phase: "Design & Construction", status: "Programmed", statusNote: "Design phase complete. The County work plan programs construction/CEI much later, in FY2029 — not yet built.", eng_color: "blue" },
     { name: "Driftwood & Ellis Roadway & Drainage Improvements", projectNumber: "10564", startDate: "01/2026", category: "Transportation & Public Works", fy2025: 0, fy2026: 7480000, phase: "Construction", status: "In Progress", statusNote: "Appears on the county's current construction list; this is Phase 4, the final phase. The FY2026 capital work plan assigns $7,480,000. The construction contract was awarded December 18, 2025, with an anticipated construction period of approximately 420 days.", contracts: [
       { phase: "Construction", contractor: "RBM Contracting Services, LLC", amount: "$3,743,685.62", date: "12/18/2025", note: "Includes an approximately $193,000 utility-relocation alternate. South Walton Utility Company agreed to reimburse the County $192,910.35 for applicable water and sewer relocation costs under an agreement approved January 13, 2026." },
@@ -861,8 +898,7 @@ function importHistoricalCipProjects() {
   // these projects: Sheriff's Office rows go to "Sheriff", everything
   // else (Transportation & Public Works, Grant Funded) goes to
   // "Public Works" (the department that owns nearly all of them). The
-  // original category label isn't lost — it's preserved in Funding
-  // Source below, so it's still visible and searchable on the page.
+  // broad category is used only to choose the closest owning department.
   function mapHistoricalDept(category) {
     return /sheriff/i.test(category || '') ? 'Sheriff' : 'Public Works';
   }
@@ -882,7 +918,7 @@ function importHistoricalCipProjects() {
         case 'Budget Project Name(s)': return name;
         case 'Dept': return mapHistoricalDept(entry.category);
         case 'Budget Project Code(s)': return entry.projectNumber || '';
-        case 'Funding Source': return entry.category || '';
+        case 'Budget Fund(s)': return entry.category === 'Grant Funded' ? 'Grant Funded' : '';
         case 'Project Phase': return entry.phase || 'None';
         case 'Project Priority': return 'None';
         case 'Status': return entry.status || 'Complete';
