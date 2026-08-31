@@ -119,6 +119,12 @@
 
     .cip-detail-not-found { text-align: center; padding: 80px 20px; }
 
+    /* Responsive 16:9 YouTube embed (Public Preview's "Project Video"
+       panel) — the padding-bottom trick since <iframe> has no intrinsic
+       aspect ratio to size a percentage-width container from. */
+    .cip-video-embed { position: relative; width: 100%; padding-bottom: 56.25%; height: 0; border-radius: 10px; overflow: hidden; }
+    .cip-video-embed iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+
     /* View toggle — Edit View (this page's normal editable form) vs.
        Public Preview (a read-only rendering matching what the public CIP
        site shows for this project, so staff can see it before anyone

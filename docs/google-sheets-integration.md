@@ -343,10 +343,16 @@ in the connected workbook, `doGet` returns `{ error: ... }` and
 If this tab still has the former `Funding Source` column, delete that
 entire column; the portal no longer reads or writes it.
 
-Add **nine new trailing columns** — appended at the end so the existing
+Add **ten new trailing columns** — appended at the end so the existing
 budget-book columns and any other tool reading this sheet are unaffected:
 
-`Status | FY2022 Proposed | FY2023 Proposed | FY2024 Proposed | FY2025 Proposed | FY2026 Proposed | Status Notes | Last Updated | Last Updated By`
+`Status | FY2022 Proposed | FY2023 Proposed | FY2024 Proposed | FY2025 Proposed | FY2026 Proposed | Status Notes | Last Updated | Last Updated By | YouTube Video URL`
+
+- `YouTube Video URL` is optional — when set to a `youtube.com` or
+  `youtu.be` link, the project's Public Preview (and, once wired up, the
+  public site) shows an embedded video player. Blank is fine; the page
+  validates the link looks like YouTube before saving so a typo doesn't
+  silently save a broken embed.
 
 - `Budget Project Name(s)` is the row-matching key — the page has no
   separate ID column to work with, so it finds the row to update by exact

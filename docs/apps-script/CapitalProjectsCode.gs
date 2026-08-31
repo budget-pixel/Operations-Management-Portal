@@ -132,6 +132,7 @@ function mapCapitalProjectRow(record) {
     accountCode: cell(record, 'Budget Account Code(s)'),
     accountName: cell(record, 'Budget Account Name(s)'),
     inHouseEngineering: cell(record, 'In-House Engineering'),
+    youtubeUrl: cell(record, 'YouTube Video URL'),
     status: cell(record, 'Status'),
     fy2022: numberCell(record, 'FY2022 Proposed'),
     fy2023: numberCell(record, 'FY2023 Proposed'),
@@ -228,6 +229,7 @@ var CAPITAL_PROJECTS_WRITE_COLUMNS = [
   'Budget Project Code(s)', 'Project Manager', 'Commissioner District', 'Location Name',
   'Start Date', 'Estimated Completion Date', 'In-House Engineering',
   'Project Narrative', 'Operational Impact', 'Pertinent Information', 'Strategic Goals',
+  'YouTube Video URL',
 ];
 
 // FY amount fields — { requestData key -> sheet column header }. Shared by
@@ -268,6 +270,7 @@ var CAPITAL_PROJECTS_TEXT_FIELDS = {
   operationalImpact: ['Operational Impact', 2000],
   pertinentInformation: ['Pertinent Information', 4000],
   strategicGoals: ['Strategic Goals', 1000],
+  youtubeUrl: ['YouTube Video URL', 500],
 };
 
 /**
@@ -368,6 +371,9 @@ function handleCapitalProjectUpdate(ss, requestData) {
     var value = String(requestData[textField] || '').trim();
     if (!isValidLength(value, maxLength)) {
       return { success: false, error: 'One of the edited fields is too long.' };
+    }
+    if (textField === 'youtubeUrl' && value && !/(?:youtube\.com|youtu\.be)/i.test(value)) {
+      return { success: false, error: 'YouTube Video URL must be a youtube.com or youtu.be link.' };
     }
     updates[CAPITAL_PROJECTS_TEXT_FIELDS[textField][0]] = value;
   }

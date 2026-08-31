@@ -217,6 +217,40 @@
     return wrap;
   }
 
+  // Pulls the 11-character video ID out of any common YouTube URL shape
+  // (watch?v=, youtu.be/, embed/, shorts/) — returns null if `url` isn't
+  // a recognizable YouTube link, so callers can skip rendering an embed
+  // for garbage/empty input rather than pointing an <iframe> at nothing.
+  function youtubeVideoId(url) {
+    if (!url) return null;
+    var match = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/i.exec(url);
+    return match ? match[1] : null;
+  }
+
+  function buildYoutubeField(project) {
+    var wrap = el('div', 'cip-detail-field');
+    wrap.appendChild(el('label', null, 'YouTube Video URL'));
+    var input = document.createElement('input');
+    input.type = 'url';
+    input.placeholder = 'https://www.youtube.com/watch?v=…';
+    input.value = project.youtubeUrl || '';
+
+    var savedNote = buildSavedNote();
+    input.addEventListener('blur', function () {
+      if (input.value === project.youtubeUrl) return;
+      var trimmed = input.value.trim();
+      if (trimmed && !youtubeVideoId(trimmed)) {
+        savedNote.textContent = 'That doesn’t look like a YouTube link.';
+        return;
+      }
+      saveProject(project, { youtubeUrl: trimmed }, savedNote, function () { input.value = project.youtubeUrl; });
+    });
+
+    wrap.appendChild(input);
+    wrap.appendChild(savedNote);
+    return wrap;
+  }
+
   function buildProjectNameControl(project) {
     var wrap = el('div', 'cip-project-name-control');
     wrap.style.display = 'flex';
@@ -463,6 +497,21 @@
     overviewPanel.appendChild(el('p', null, project.projectNarrative || 'No project narrative is currently available.'));
     leftStack.appendChild(overviewPanel);
 
+    var videoId = youtubeVideoId(project.youtubeUrl);
+    if (videoId) {
+      var videoPanel = el('div', 'cip-detail-panel');
+      videoPanel.appendChild(el('h2', null, 'Project Video'));
+      var videoWrap = el('div', 'cip-video-embed');
+      var iframe = document.createElement('iframe');
+      iframe.src = 'https://www.youtube.com/embed/' + videoId;
+      iframe.title = project.projectName + ' project video';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      iframe.allowFullscreen = true;
+      videoWrap.appendChild(iframe);
+      videoPanel.appendChild(videoWrap);
+      leftStack.appendChild(videoPanel);
+    }
+
     var budgetPanel = el('div', 'cip-detail-panel');
     budgetPanel.appendChild(el('h2', null, 'Budget & Funding Summary'));
     var highlight = el('div', 'cip-detail-budget-highlight');
@@ -607,6 +656,7 @@
     detailsPanel.appendChild(buildMonthYearField(project, 'startDate', 'Start Date'));
     detailsPanel.appendChild(buildMonthYearField(project, 'estCompletionDate', 'Estimated Completion Date'));
     detailsPanel.appendChild(buildTextField(project, 'inHouseEngineering', 'In-House Engineering'));
+    detailsPanel.appendChild(buildYoutubeField(project));
     leftStack.appendChild(detailsPanel);
 
     grid.appendChild(leftStack);
