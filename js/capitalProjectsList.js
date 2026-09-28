@@ -175,7 +175,7 @@
     if (projects.length === 0) {
       var emptyRow = document.createElement('tr');
       var emptyCell = document.createElement('td');
-      emptyCell.colSpan = 7;
+      emptyCell.colSpan = 8;
       emptyCell.textContent = 'No capital projects found.';
       emptyRow.appendChild(emptyCell);
       tbody.appendChild(emptyRow);
@@ -216,10 +216,8 @@
 
       row.appendChild(cell(project.fund));
       row.appendChild(cell(project.phase));
-      var scheduleDate = isCompletedProject(project)
-        ? project.estCompletionDate
-        : (project.startDate || project.estCompletionDate);
-      row.appendChild(cell(formatMonthYear(scheduleDate)));
+      row.appendChild(cell(formatMonthYear(project.startDate)));
+      row.appendChild(cell(formatMonthYear(project.estCompletionDate)));
       row.appendChild(cell(project.status));
       var projectTotal = totalBudget(project);
       var budgetDisplay = selectedYear === 'past' && project.isHistorical && projectTotal === 0
@@ -234,7 +232,7 @@
         var subtotalRow = document.createElement('tr');
         subtotalRow.className = 'cip-grant-subtotal';
         var subtotalLabel = document.createElement('td');
-        subtotalLabel.colSpan = 6;
+        subtotalLabel.colSpan = 7;
         subtotalLabel.textContent = 'Grant Funded Subtotal';
         subtotalRow.appendChild(subtotalLabel);
         subtotalRow.appendChild(cell(Calculations.formatWholeDollarCurrency(grantSubtotal)));
@@ -267,7 +265,7 @@
     var subtotalRow = document.createElement('tr');
     subtotalRow.className = 'cip-project-subtotal';
     var subtotalLabel = document.createElement('td');
-    subtotalLabel.colSpan = 6;
+    subtotalLabel.colSpan = 7;
     subtotalLabel.textContent = label;
     subtotalRow.appendChild(subtotalLabel);
     subtotalRow.appendChild(cell(Calculations.formatWholeDollarCurrency(amount)));
@@ -348,7 +346,7 @@
   }
 
   function loadProjects(forceRefresh) {
-    tbody.innerHTML = '<tr><td colspan="7">Loading capital projects...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8">Loading capital projects...</td></tr>';
     var savedState = readFilterState();
     var request = forceRefresh ? CapitalProjects.refresh() : CapitalProjects.getProjects();
     request
@@ -434,5 +432,8 @@
     refreshBtn.addEventListener('click', function () { loadProjects(true); });
   }
 
-  init();
+  // Waits for js/auth.js's login gate — a redirect to sign-in leaves
+  // this promise permanently unresolved on this page load, which is
+  // correct: the browser is already navigating away.
+  window.BudgetApp.Auth.ready.then(init);
 })(window.BudgetApp.CapitalProjects, window.BudgetApp.Calculations);

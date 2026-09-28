@@ -343,11 +343,24 @@ in the connected workbook, `doGet` returns `{ error: ... }` and
 If this tab still has the former `Funding Source` column, delete that
 entire column; the portal no longer reads or writes it.
 
-Add **ten new trailing columns** — appended at the end so the existing
+Add **twelve new trailing columns** — appended at the end so the existing
 budget-book columns and any other tool reading this sheet are unaffected:
 
-`Status | FY2022 Proposed | FY2023 Proposed | FY2024 Proposed | FY2025 Proposed | FY2026 Proposed | Status Notes | Last Updated | Last Updated By | YouTube Video URL`
+`Status | FY2022 Proposed | FY2023 Proposed | FY2024 Proposed | FY2025 Proposed | FY2026 Proposed | Status Notes | Last Updated | Last Updated By | YouTube Video URL | Is Historical | Total Project Cost`
 
+- `Is Historical` is `Yes`/`No`, system-managed rather than something
+  staff normally type in directly: `handleCapitalProjectCreate` always
+  writes `No` for a brand-new project, and after adding this column to a
+  sheet with existing rows, run **backfillIsHistoricalFlag** once
+  (Apps Script editor → function dropdown → Run) to fill it in for
+  everything already there — see the comment on that function in
+  `CapitalProjectsCode.gs` for exactly how it decides Yes vs No. It
+  exists because `capital-projects.html`'s "Past CIP" filter needs to
+  recognize a historical project even when every one of its FY2022-2026
+  amounts is `$0`/blank (a handful of the originally-imported historical
+  rows have no dollar figure at all) — something that can't be inferred
+  from the FY amounts alone once a row's origin isn't tracked any other
+  way.
 - `YouTube Video URL` is optional — when set to a `youtube.com` or
   `youtu.be` link, the project's Public Preview (and, once wired up, the
   public site) shows an embedded video player. Blank is fine; the page
@@ -393,46 +406,82 @@ budget-book columns and any other tool reading this sheet are unaffected:
   value to a stale one when two edits landed close together or the page's
   local copy was out of date.
 
-### Importing the FY2022-FY2026 historical project record
+### The FY2022-FY2026 historical project record
 
-After adding the nine columns above, you can bulk-load the county's 161
-historical capital projects (FY2022-FY2026, sourced from the County's
-5-year work plans and general ledger — see
-[`apps-script/historical-cip-source-data.js`](apps-script/historical-cip-source-data.js)
-for full per-project citations) into this same sheet, as additional rows
-alongside the live FY2027-2031 projects:
+The county's 161 historical capital projects (FY2022-FY2026, sourced from
+the County's 5-year work plans and general ledger) were bulk-loaded into
+this same sheet, as additional rows alongside the live FY2027-2031
+projects, via a one-time `importHistoricalCipProjects()` function (plus a
+`backfillHistoricalStatus()` recovery pass for rows imported before the
+`Status` column existed). Both have since been **deleted from
+`CapitalProjectsCode.gs`**, and their source data file has been deleted
+from the repo too — their job is done, and every row they wrote is now
+just an ordinary row in the sheet, editable the same way as any other
+project.
 
-1. In the Apps Script editor (the same project you pasted
-   `CapitalProjectsCode.gs` into), use the function dropdown next to
-   **Run** to select **importHistoricalCipProjects**, then click **Run**.
-2. Authorize if prompted (Sheets access only).
-3. Check **Executions** (left sidebar) or **View → Logs** for a summary
-   line like `Imported 161 historical projects, skipped 0`.
+### Sign-in / authentication (Capital Projects only, for now)
 
-This is a one-time, manually-triggered function — **not** reachable
-through `doGet`/`doPost` (the public web endpoint), specifically so the
-website itself can never be used to bulk-inject rows. It's also safe to
-re-run: any project name already present in the sheet is skipped, so
-running it again (by mistake, or after adding more entries to
-`HISTORICAL_CIP_PROJECTS` later) won't create duplicates. Historical
-entries only carry a broad grouping (Transportation & Public Works,
-Grant Funded, Sheriff's Office), not a real department, so the import
-maps `Sheriff's Office` → `Sheriff` and everything else → `Public Works`
-for `Dept`, while preserving the original grouping label in `Funding
-Source` so it's still visible on the page.
+`capital-projects.html` and `capital-project.html` require signing in
+with a Microsoft work account (Entra ID / Azure AD) before they show
+anything — this is a pilot of a portal-wide login gate, rolled out here
+first since this module gained create/delete endpoints. Reads require any
+valid signed-in account in the org's tenant; writes (create/update/delete)
+additionally require the signed-in email to be on this workbook's own
+allowlist.
 
-**If you ran the import before the `Status` column existed (or before
-its header text exactly matched `Status`)** — every historical row's
-Status will show blank, and re-running `importHistoricalCipProjects`
-won't fix it (it skips names already on the sheet, Status included).
-Instead, once the `Status` column is correctly in place, run
-**backfillHistoricalStatus** the same way (function dropdown → Run). It
-patches only the `Status` cell, only for historical rows whose Status is
-currently blank — it never overwrites a Status someone has already set
-by hand.
+1. **Azure AD app registration** — already set up (see `auth-poc.html`
+   for the existing client ID/tenant ID `js/auth.js` reuses). If this is
+   a fresh registration instead: Azure Portal → App registrations → New
+   registration → Single-page application. Under **Authentication**, add
+   exactly one redirect URI: your deployed `index.html` (e.g.
+   `https://operations.budget-waltoncountyfl.com/index.html`) — every
+   protected page's login round-trips through that one URL (see the
+   comment at the top of `js/auth.js` for why only one URI is needed).
+   Under **API permissions**, `User.Read` (Microsoft Graph, delegated) is
+   the only permission needed.
+2. **Authorized Users tab** — add a new tab to the Capital Improvement
+   Plan workbook named exactly `Authorized Users`, with one email address
+   per row (any column — the backend just scans every cell on the tab).
+   These are the accounts allowed to create, edit, or delete projects;
+   anyone else signed into the org's tenant can still view the ledger,
+   but every write attempt is rejected with a clear error naming who to
+   ask to be added. **A missing or empty tab authorizes nobody** (fails
+   closed), not everybody — create it before anyone needs to make an
+   edit.
+3. **Redeploy `CapitalProjectsCode.gs`** after pasting the version with
+   `verifyGraphUser()`/`isAuthorizedEditor()` — the first deployment (or
+   first deployment after adding those functions) prompts for an
+   additional authorization scope (calling `UrlFetchApp.fetch()` against
+   Microsoft Graph) beyond the Sheets access earlier deployments needed;
+   click through that consent screen the same way `authorizeAdditionalScopes()`
+   in `Code.gs` (§6 above) describes for the Gmail scope.
+4. **`js/auth.js`'s `clientId`/`authority`** must match the app
+   registration from step 1 — update them if this is a different
+   registration than `auth-poc.html`'s.
+
+Every other module (Budget/Grant/Rollforward/Budget Request, Work
+Orders, etc.) is **not** gated by this yet — this is a first pass on the
+highest-risk module (the one with delete), not a portal-wide rollout.
 
 ## Troubleshooting
 
+- **Capital Projects redirects to Microsoft login in a loop, or
+  `redirect_uri_mismatch`** — the URI MSAL is redirecting to
+  (`window.location.origin + '/index.html'`, per `js/auth.js`) isn't
+  registered on the Azure AD app registration (or doesn't match exactly —
+  http vs https, trailing slash, wrong domain). Add/fix it under
+  Authentication → Redirect URIs in the Azure Portal.
+- **"Not signed in. Please sign in and try again."** from the Capital
+  Projects API, even though the page shows you signed in — the access
+  token expired or `UrlFetchApp.fetch()` to Microsoft Graph in
+  `verifyGraphUser()` failed for some other reason (network, Graph
+  outage). Refreshing the page re-acquires a token silently in most
+  cases; if it persists, check **Executions** in the Apps Script editor
+  for the logged error.
+- **"Your account (...) is not authorized to make changes here."** — the
+  signed-in email isn't on the `Authorized Users` tab. Add it there
+  (exact email, any column, any row) — no redeploy needed, that tab is
+  read fresh on every request.
 - **"Chart of Accounts is not configured yet" banner** — `SHEETS_API_URL` in
   `js/googleSheets.js` is still the placeholder. Complete step 4 above.
 - **"Sheet not found" error** — a tab name doesn't match exactly (check for

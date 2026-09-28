@@ -523,6 +523,13 @@
     fundingItem.appendChild(el('strong', null, project.fund || '—'));
     budgetPanel.appendChild(fundingItem);
 
+    if (project.totalProjectCost > 0) {
+      var totalCostItem = el('div', 'cip-detail-list-item');
+      totalCostItem.appendChild(el('span', null, 'Total Project Cost'));
+      totalCostItem.appendChild(el('strong', null, Calculations.formatWholeDollarCurrency(project.totalProjectCost)));
+      budgetPanel.appendChild(totalCostItem);
+    }
+
     var fundedYears = HISTORICAL_FY_FIELDS.concat(PROPOSED_FY_FIELDS).filter(function (field) {
       return project[field] > 0;
     });
@@ -577,7 +584,7 @@
 
     var milestones = [];
     if (project.startDate) milestones.push('Start: ' + formatMonthYear(project.startDate));
-    if (project.estCompletionDate) milestones.push('Est. Completion: ' + formatMonthYear(project.estCompletionDate));
+    if (project.estCompletionDate) milestones.push((isProjectComplete(project) ? 'Completed: ' : 'Est. Completion: ') + formatMonthYear(project.estCompletionDate));
     statusPanel.appendChild(el('p', null, milestones.length > 0
       ? milestones.join(' · ')
       : 'No dated project milestones are currently listed.'));
@@ -654,7 +661,7 @@
     detailsPanel.appendChild(buildSelectField(project, 'commissionerDistrict', 'Commissioner District', DISTRICT_OPTIONS));
     detailsPanel.appendChild(buildTextField(project, 'locationName', 'Location'));
     detailsPanel.appendChild(buildMonthYearField(project, 'startDate', 'Start Date'));
-    detailsPanel.appendChild(buildMonthYearField(project, 'estCompletionDate', 'Estimated Completion Date'));
+    detailsPanel.appendChild(buildMonthYearField(project, 'estCompletionDate', 'Estimated / Actual Completion Date'));
     detailsPanel.appendChild(buildTextField(project, 'inHouseEngineering', 'In-House Engineering'));
     detailsPanel.appendChild(buildYoutubeField(project));
     leftStack.appendChild(detailsPanel);
@@ -677,6 +684,7 @@
     // only ever having one non-zero historical year. Labeled "Actual
     // Cost" once the project is marked Complete, since a finished
     // project's amount is what was spent, not a proposal.
+    budgetPanel.appendChild(buildYearRow(project, 'totalProjectCost', 'Total Project Cost'));
     budgetPanel.appendChild(buildYearRow(
       project,
       primaryHistoricalField(project),
@@ -864,5 +872,8 @@
       });
   }
 
-  init();
+  // Waits for js/auth.js's login gate — a redirect to sign-in leaves
+  // this promise permanently unresolved on this page load, which is
+  // correct: the browser is already navigating away.
+  window.BudgetApp.Auth.ready.then(init);
 })(window.BudgetApp.CapitalProjects, window.BudgetApp.Calculations);
