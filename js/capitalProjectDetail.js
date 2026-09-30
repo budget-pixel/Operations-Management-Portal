@@ -34,7 +34,7 @@
   var DISTRICT_OPTIONS = [
     'District 1', 'District 2', 'District 3', 'District 4', 'District 5', 'Countywide', 'Not specified',
   ];
-  var STATUS_OPTIONS = ['Programmed', 'In Progress', 'Complete', 'Cancelled', 'None'];
+  var STATUS_OPTIONS = ['Programmed', 'In Progress', 'On Hold', 'Complete', 'Cancelled', 'None'];
   var FUND_OPTIONS = [
     'Capital Projects Fund', 'Transportation Fund', 'Tourist Development Fund', 'Grant Funded', 'Sheriff Fund',
   ];
@@ -430,7 +430,34 @@
     return select;
   }
 
-  function buildPhaseChecklistRow(project, phaseField, statusField, dateField) {
+  // Shared by the Start Date / Date Completed inputs in
+  // buildPhaseChecklistRow — a Month-Year text field that saves the
+  // given `field` on blur, identical behavior to buildMonthYearField
+  // but without its own label (this row shares one label for the whole
+  // group — see phaseChecklistLabel where it's used).
+  function buildInlineMonthYearInput(project, field, placeholder, savedNote) {
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = placeholder;
+    input.value = formatMonthYear(project[field]);
+    input.style.flex = '1 1 140px';
+
+    input.addEventListener('blur', function () {
+      var formatted = formatMonthYear(input.value);
+      if (formatted === project[field]) {
+        input.value = formatted;
+        return;
+      }
+      var overrides = {};
+      overrides[field] = formatted;
+      saveProject(project, overrides, savedNote, function () { input.value = formatMonthYear(project[field]); });
+      input.value = formatted;
+    });
+
+    return input;
+  }
+
+  function buildPhaseChecklistRow(project, phaseField, statusField, startDateField, completeDateField) {
     var wrap = el('div', 'cip-detail-field');
     var row = document.createElement('div');
     row.style.display = 'flex';
@@ -443,27 +470,17 @@
     row.appendChild(buildInlineSelect(project, phaseField, PHASE_OPTIONS, savedNote));
     row.appendChild(buildInlineSelect(project, statusField, STATUS_OPTIONS, savedNote));
 
-    var dateInput = document.createElement('input');
-    dateInput.type = 'text';
-    dateInput.placeholder = 'Date completed';
-    dateInput.value = formatMonthYear(project[dateField]);
-    dateInput.style.flex = '1 1 140px';
-    row.appendChild(dateInput);
+    // Grouped so the two dates stay side by side as a pair even when
+    // the row wraps onto a second line on a narrower screen, instead of
+    // Date Completed dropping to a line by itself.
+    var dateGroup = document.createElement('div');
+    dateGroup.style.cssText = 'display:flex; gap:10px; flex:2 1 280px;';
+    dateGroup.appendChild(buildInlineMonthYearInput(project, startDateField, 'Start date', savedNote));
+    dateGroup.appendChild(buildInlineMonthYearInput(project, completeDateField, 'Date completed', savedNote));
+    row.appendChild(dateGroup);
 
     wrap.appendChild(row);
     wrap.appendChild(savedNote);
-
-    dateInput.addEventListener('blur', function () {
-      var formatted = formatMonthYear(dateInput.value);
-      if (formatted === project[dateField]) {
-        dateInput.value = formatted;
-        return;
-      }
-      var overrides = {};
-      overrides[dateField] = formatted;
-      saveProject(project, overrides, savedNote, function () { dateInput.value = formatMonthYear(project[dateField]); });
-      dateInput.value = formatted;
-    });
 
     return wrap;
   }
@@ -672,6 +689,33 @@
     statusPanel.appendChild(el('p', null, milestones.length > 0
       ? milestones.join(' · ')
       : 'No dated project milestones are currently listed.'));
+
+    // Phase checklist (Design/CEI/Construction, etc.) captured on the
+    // edit view — shown here too so this data isn't only visible
+    // internally.
+    var phaseSlots = [
+      { name: project.phase1Name, status: project.phase1Status, start: project.phase1StartDate, complete: project.phase1CompleteDate },
+      { name: project.phase2Name, status: project.phase2Status, start: project.phase2StartDate, complete: project.phase2CompleteDate },
+      { name: project.phase3Name, status: project.phase3Status, start: project.phase3StartDate, complete: project.phase3CompleteDate },
+    ].filter(function (slot) { return slot.name; });
+
+    if (phaseSlots.length > 0) {
+      var phaseList = el('div', 'cip-detail-list');
+      phaseList.style.marginTop = '12px';
+      phaseSlots.forEach(function (slot) {
+        var dates = [];
+        if (slot.start) dates.push('Start: ' + formatMonthYear(slot.start));
+        if (slot.complete) dates.push('Complete: ' + formatMonthYear(slot.complete));
+        var valueParts = [slot.status || 'Not started'];
+        if (dates.length > 0) valueParts.push(dates.join(', '));
+        var item = el('div', 'cip-detail-list-item');
+        item.appendChild(el('span', null, slot.name));
+        item.appendChild(el('strong', null, valueParts.join(' — ')));
+        phaseList.appendChild(item);
+      });
+      statusPanel.appendChild(phaseList);
+    }
+
     rightStack.appendChild(statusPanel);
 
     grid.appendChild(rightStack);
@@ -792,13 +836,13 @@
     phaseStatusRow.appendChild(statusField);
     statusPanel.appendChild(phaseStatusRow);
 
-    var phaseChecklistLabel = el('div', null, 'Phase / Status / Date Completed');
+    var phaseChecklistLabel = el('div', null, 'Phase / Status / Start Date / Date Completed');
     phaseChecklistLabel.style.cssText = 'display:block; margin-bottom:6px; color:var(--color-muted); '
       + 'font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;';
     statusPanel.appendChild(phaseChecklistLabel);
-    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase1Name', 'phase1Status', 'phase1CompleteDate'));
-    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase2Name', 'phase2Status', 'phase2CompleteDate'));
-    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase3Name', 'phase3Status', 'phase3CompleteDate'));
+    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase1Name', 'phase1Status', 'phase1StartDate', 'phase1CompleteDate'));
+    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase2Name', 'phase2Status', 'phase2StartDate', 'phase2CompleteDate'));
+    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase3Name', 'phase3Status', 'phase3StartDate', 'phase3CompleteDate'));
     statusPanel.appendChild(buildSelectField(project, 'dept', 'Dept', deptOptions));
     statusPanel.appendChild(buildSelectField(project, 'fund', 'Fund', FUND_OPTIONS));
     statusPanel.appendChild(buildSelectField(project, 'priority', 'Priority', PRIORITY_OPTIONS));

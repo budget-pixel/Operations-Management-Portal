@@ -106,7 +106,7 @@
   // sheet's Status column starts out blank for every live FY2027-2031
   // project (only the historical import fills it in, and only for rows
   // it adds).
-  var STATUS_OPTIONS = ['Programmed', 'In Progress', 'Complete', 'Cancelled', 'None'];
+  var STATUS_OPTIONS = ['Programmed', 'In Progress', 'On Hold', 'Complete', 'Cancelled', 'None'];
 
   var allProjects = [];
 
