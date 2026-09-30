@@ -232,6 +232,15 @@ function mapCapitalProjectRow(record) {
     fy2031: numberCell(record, 'FY2031 Proposed'),
     totalFy2027to2031: numberCell(record, 'Total FY2027-FY2031'),
     totalProjectCost: numberCell(record, 'Total Project Cost'),
+    phase1Name: cell(record, 'Phase 1 Name'),
+    phase1Status: cell(record, 'Phase 1 Status'),
+    phase1CompleteDate: cell(record, 'Phase 1 Complete Date'),
+    phase2Name: cell(record, 'Phase 2 Name'),
+    phase2Status: cell(record, 'Phase 2 Status'),
+    phase2CompleteDate: cell(record, 'Phase 2 Complete Date'),
+    phase3Name: cell(record, 'Phase 3 Name'),
+    phase3Status: cell(record, 'Phase 3 Status'),
+    phase3CompleteDate: cell(record, 'Phase 3 Complete Date'),
     statusNotes: cell(record, 'Status Notes'),
     lastUpdated: cell(record, 'Last Updated'),
     lastUpdatedBy: cell(record, 'Last Updated By'),
@@ -313,6 +322,9 @@ var CAPITAL_PROJECTS_WRITE_COLUMNS = [
   'Start Date', 'Estimated Completion Date', 'In-House Engineering',
   'Project Narrative', 'Operational Impact', 'Pertinent Information', 'Strategic Goals',
   'YouTube Video URL', 'Total Project Cost',
+  'Phase 1 Name', 'Phase 1 Status', 'Phase 1 Complete Date',
+  'Phase 2 Name', 'Phase 2 Status', 'Phase 2 Complete Date',
+  'Phase 3 Name', 'Phase 3 Status', 'Phase 3 Complete Date',
 ];
 
 // FY amount fields — { requestData key -> sheet column header }. Shared by
@@ -356,6 +368,22 @@ var CAPITAL_PROJECTS_TEXT_FIELDS = {
   pertinentInformation: ['Pertinent Information', 4000],
   strategicGoals: ['Strategic Goals', 1000],
   youtubeUrl: ['YouTube Video URL', 500],
+  // Three phase-checklist rows below "Current Project Phase" — each is
+  // a Project-Phase dropdown (PHASE_OPTIONS), a Status dropdown
+  // (STATUS_OPTIONS), and a free-text completion date, letting staff
+  // record e.g. "Design / Complete / March 2025" as its own line
+  // independent of the single "Current Project Phase" field above.
+  // *CompleteDate is free text in the same "Month Year" style as Start
+  // Date/Estimated Completion Date.
+  phase1Name: ['Phase 1 Name', 60],
+  phase1Status: ['Phase 1 Status', 60],
+  phase1CompleteDate: ['Phase 1 Complete Date', 60],
+  phase2Name: ['Phase 2 Name', 60],
+  phase2Status: ['Phase 2 Status', 60],
+  phase2CompleteDate: ['Phase 2 Complete Date', 60],
+  phase3Name: ['Phase 3 Name', 60],
+  phase3Status: ['Phase 3 Status', 60],
+  phase3CompleteDate: ['Phase 3 Complete Date', 60],
 };
 
 /**

@@ -343,10 +343,12 @@ in the connected workbook, `doGet` returns `{ error: ... }` and
 If this tab still has the former `Funding Source` column, delete that
 entire column; the portal no longer reads or writes it.
 
-Add **twelve new trailing columns** — appended at the end so the existing
+Add **twenty-one new trailing columns** — appended at the end so the existing
 budget-book columns and any other tool reading this sheet are unaffected:
 
-`Status | FY2022 Proposed | FY2023 Proposed | FY2024 Proposed | FY2025 Proposed | FY2026 Proposed | Status Notes | Last Updated | Last Updated By | YouTube Video URL | Is Historical | Total Project Cost`
+`Status | FY2022 Proposed | FY2023 Proposed | FY2024 Proposed | FY2025 Proposed | FY2026 Proposed | Status Notes | Last Updated | Last Updated By | YouTube Video URL | Is Historical | Total Project Cost | Phase 1 Name | Phase 1 Status | Phase 1 Complete Date | Phase 2 Name | Phase 2 Status | Phase 2 Complete Date | Phase 3 Name | Phase 3 Status | Phase 3 Complete Date`
+
+- The three `Phase N Name`/`Phase N Status`/`Phase N Complete Date` groups are the project page's "Current Project Phase" checklist — three rows, each a Project Phase dropdown (same options as the `Project Phase` column itself), a Status dropdown (same options as the `Status` column), and a free-text completion date, independent of the single `Project Phase`/`Status` columns above them. This lets staff record something like "Design / Complete / March 2025" as its own line without it overwriting the project's current overall phase/status. `Phase N Complete Date` is free text in the same "Month Year" style as Start Date/Estimated Completion Date.
 
 - `Is Historical` is `Yes`/`No`, system-managed rather than something
   staff normally type in directly: `handleCapitalProjectCreate` always

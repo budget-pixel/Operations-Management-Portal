@@ -384,6 +384,90 @@
     return amountFormatter.format(value || 0);
   }
 
+  // One row per delivery-phase checkbox (Design/CEI/Construction) below
+  // "Current Project Phase" — a phase can be marked complete
+  // independently of the sheet's single Project Phase dropdown, each
+  // with its own completion date, since a project moves through these
+  // three phases at different times and staff want a record of when
+  // each wrapped up, not just where the project is "now".
+  // A dropdown backed by a fixed option list, rendered compactly for
+  // use inside buildPhaseChecklistRow's row (unlike buildSelectField,
+  // this has no label above it and no "— None —" placeholder — a blank
+  // phase/status slot is a perfectly normal starting state here, not a
+  // data problem to flag the way a blank Fund/Dept elsewhere is).
+  function buildInlineSelect(project, field, options, savedNote) {
+    var select = document.createElement('select');
+    select.style.flex = '1 1 140px';
+    var currentValue = project[field];
+
+    var blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = '—';
+    blank.selected = !currentValue;
+    select.appendChild(blank);
+
+    options.forEach(function (option) {
+      var optionEl = document.createElement('option');
+      optionEl.value = option;
+      optionEl.textContent = option;
+      optionEl.selected = option === currentValue;
+      select.appendChild(optionEl);
+    });
+    if (currentValue && options.indexOf(currentValue) === -1) {
+      var customOption = document.createElement('option');
+      customOption.value = currentValue;
+      customOption.textContent = currentValue;
+      customOption.selected = true;
+      select.insertBefore(customOption, select.firstChild.nextSibling);
+    }
+
+    select.addEventListener('change', function () {
+      var overrides = {};
+      overrides[field] = select.value;
+      saveProject(project, overrides, savedNote, function () { select.value = project[field]; });
+    });
+
+    return select;
+  }
+
+  function buildPhaseChecklistRow(project, phaseField, statusField, dateField) {
+    var wrap = el('div', 'cip-detail-field');
+    var row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.gap = '10px';
+    row.style.flexWrap = 'wrap';
+
+    var savedNote = buildSavedNote();
+
+    row.appendChild(buildInlineSelect(project, phaseField, PHASE_OPTIONS, savedNote));
+    row.appendChild(buildInlineSelect(project, statusField, STATUS_OPTIONS, savedNote));
+
+    var dateInput = document.createElement('input');
+    dateInput.type = 'text';
+    dateInput.placeholder = 'Date completed';
+    dateInput.value = formatMonthYear(project[dateField]);
+    dateInput.style.flex = '1 1 140px';
+    row.appendChild(dateInput);
+
+    wrap.appendChild(row);
+    wrap.appendChild(savedNote);
+
+    dateInput.addEventListener('blur', function () {
+      var formatted = formatMonthYear(dateInput.value);
+      if (formatted === project[dateField]) {
+        dateInput.value = formatted;
+        return;
+      }
+      var overrides = {};
+      overrides[dateField] = formatted;
+      saveProject(project, overrides, savedNote, function () { dateInput.value = formatMonthYear(project[dateField]); });
+      dateInput.value = formatted;
+    });
+
+    return wrap;
+  }
+
   function buildYearRow(project, field, label) {
     var row = el('div', 'cip-detail-year-row');
     row.appendChild(el('span', null, label || FY_LABELS[field]));
@@ -633,7 +717,7 @@
     kicker.appendChild(kickerItem('Fund', project.fund));
     kicker.appendChild(kickerItem('Department', project.dept));
     kicker.appendChild(kickerItem('Priority', project.priority));
-    kicker.appendChild(kickerItem('Phase', project.phase));
+    kicker.appendChild(kickerItem('Current Phase', project.phase));
     hero.appendChild(kicker);
     content.appendChild(hero);
 
@@ -697,8 +781,24 @@
 
     var statusPanel = el('div', 'cip-detail-panel');
     statusPanel.appendChild(el('h2', null, 'Status'));
-    statusPanel.appendChild(buildSelectField(project, 'phase', 'Project Phase', PHASE_OPTIONS));
-    statusPanel.appendChild(buildSelectField(project, 'status', 'Status', STATUS_OPTIONS));
+
+    var phaseStatusRow = el('div');
+    phaseStatusRow.style.cssText = 'display:flex; gap:10px; align-items:flex-start;';
+    var phaseField = buildSelectField(project, 'phase', 'Current Project Phase', PHASE_OPTIONS);
+    phaseField.style.flex = '1 1 0';
+    var statusField = buildSelectField(project, 'status', 'Current Status', STATUS_OPTIONS);
+    statusField.style.flex = '1 1 0';
+    phaseStatusRow.appendChild(phaseField);
+    phaseStatusRow.appendChild(statusField);
+    statusPanel.appendChild(phaseStatusRow);
+
+    var phaseChecklistLabel = el('div', null, 'Phase / Status / Date Completed');
+    phaseChecklistLabel.style.cssText = 'display:block; margin-bottom:6px; color:var(--color-muted); '
+      + 'font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;';
+    statusPanel.appendChild(phaseChecklistLabel);
+    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase1Name', 'phase1Status', 'phase1CompleteDate'));
+    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase2Name', 'phase2Status', 'phase2CompleteDate'));
+    statusPanel.appendChild(buildPhaseChecklistRow(project, 'phase3Name', 'phase3Status', 'phase3CompleteDate'));
     statusPanel.appendChild(buildSelectField(project, 'dept', 'Dept', deptOptions));
     statusPanel.appendChild(buildSelectField(project, 'fund', 'Fund', FUND_OPTIONS));
     statusPanel.appendChild(buildSelectField(project, 'priority', 'Priority', PRIORITY_OPTIONS));
